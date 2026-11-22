@@ -1458,6 +1458,21 @@
 "help.workbuddy-ai.progress.detail" = "After you trust pacer_progress in WorkBuddy AI’s Custom Connector, tasks report how much is done.";
 "help.workbuddy-ai.apps.title" = "Back to the chat";
 "help.workbuddy-ai.apps.detail" = "Click a task to open its conversation in WorkBuddy AI.";
+
+"module.glm.summary" = "Tasks and progress from GLM ZCode.";
+"welcome.module.glm_missing" = "GLM ZCode not found";
+"glm.progress_ring_help" = "The ring around a task follows each turn as it works. While the module is on, Pacer keeps its hooks in ZCode's configuration; turning the module off takes them out again.";
+"main.search.glm" = "glm zcode tasks progress hooks folder";
+"panel.block.glm" = "GLM ZCode tasks";
+"panel.block_detail.glm" = "Running, waiting and finished GLM ZCode tasks.";
+"help.glm.credits.title" = "No quota dial";
+"help.glm.credits.detail" = "GLM's coding plan has no rate-limit window to read, so Pacer shows its tasks only.";
+"help.glm.cost.title" = "No turn costs";
+"help.glm.cost.detail" = "GLM ZCode task rows show no per-turn cost.";
+"help.glm.progress.title" = "Progress";
+"help.glm.progress.detail" = "The ring around a task follows each turn as it works, with the stage shown beside it.";
+"help.glm.apps.title" = "Back to the chat";
+"help.glm.apps.detail" = "Open your conversation in ZCode itself.";
 "main.history.workbuddy-ai_week" = "WorkBuddy AI · Last 7 Days";
 "main.history.workbuddy-ai_empty" = "Shows after two days with credits used.";
 "harness.account.sign_out" = "Sign Out";

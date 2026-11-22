@@ -1458,6 +1458,21 @@
 "help.workbuddy-ai.progress.detail" = "在 WorkBuddy AI 的自定义连接器里信任 pacer_progress 后，任务会报告完成了多少。";
 "help.workbuddy-ai.apps.title" = "回到对话";
 "help.workbuddy-ai.apps.detail" = "点击任务，在 WorkBuddy AI 里打开对应的对话。";
+
+"module.glm.summary" = "GLM ZCode 的任务和进度。";
+"welcome.module.glm_missing" = "未找到 GLM ZCode";
+"glm.progress_ring_help" = "任务图标周围的圆环随每一轮的推进而变化。模块开启期间，Pacer 会把自己的钩子保持在 ZCode 的配置中；关闭模块时会一并移除。";
+"main.search.glm" = "glm zcode 任务 进度 钩子 文件夹";
+"panel.block.glm" = "GLM ZCode 任务";
+"panel.block_detail.glm" = "运行中、等待中和已完成的 GLM ZCode 任务。";
+"help.glm.credits.title" = "无额度表盘";
+"help.glm.credits.detail" = "GLM 编程套餐没有可读取的限额窗口，因此 Pacer 只显示它的任务。";
+"help.glm.cost.title" = "无单轮费用";
+"help.glm.cost.detail" = "GLM ZCode 任务行不显示单轮费用。";
+"help.glm.progress.title" = "进度";
+"help.glm.progress.detail" = "任务图标周围的圆环随每一轮的推进而变化，旁边显示当前阶段。";
+"help.glm.apps.title" = "回到会话";
+"help.glm.apps.detail" = "在 ZCode 中打开对应的会话。";
 "main.history.workbuddy-ai_week" = "WorkBuddy AI · 近 7 天";
 "main.history.workbuddy-ai_empty" = "有两天以上的积分消耗后显示。";
 "harness.account.sign_out" = "退出登录";

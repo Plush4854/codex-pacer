@@ -19,7 +19,7 @@ The first time you open Codex Pacer, a short guide walks you through it:
 
 1. What each part of the collapsed bar means.
 2. **Island**, which sits at the top center of the screen around the notch, or **Free Move**, which you drag anywhere.
-3. Which services to follow: Codex, Claude, DeepSeek and WorkBuddy (and WorkBuddy AI, the international version, if you have it). Pacer turns on the ones it finds on this computer; the others wait under **more not found on this computer**.
+3. Which services to follow: Codex, Claude, DeepSeek, WorkBuddy (and WorkBuddy AI, the international version, if you have it) and GLM ZCode. Pacer turns on the ones it finds on this computer; the others wait under **more not found on this computer**.
 4. Progress rings, notifications and opening at login.
 
 You can open the guide again from **Help & Updates**. After each update, a short **What's New** note shows the highlights once.
@@ -123,6 +123,8 @@ The progress ring is on by default. The first time, the WorkBuddy page shows the
 Once you trust it, the steps fold away into one line: it works in new WorkBuddy conversations. That line goes too once WorkBuddy first reports progress.
 
 After you click **Open** or **Restart**, a small floating guide shows in the corner of your screen. WorkBuddy takes some seconds to start and show its connectors, so the guide first asks you to wait, then shows steps 4 and 5, each with a picture of what to click. It follows along as you click, even with Settings closed, and needs no permission. It closes by itself when you're done, or with its close button. If you turn the tool off or remove it in WorkBuddy and then turn the ring off and on, Pacer asks you to restart WorkBuddy so it reads the tool again. If a Pacer update changes the tool, WorkBuddy asks you to trust it again, and the sidebar, Overview and the expanded panel say so. Turning the ring off removes the tool. If WorkBuddy keeps its data elsewhere, choose the folder under **Custom Locations**.
+
+**GLM ZCode.** Pacer follows GLM's ZCode tasks on this computer: running work, questions waiting for you and finished turns. Task tracking sets itself up when the GLM module is on; restart running ZCode sessions once afterwards. Pacer adds its hooks to ZCode's configuration and keeps them current while the module is on, and takes them out when it is turned off. GLM's coding plan has no rate-limit window to read, so there is no quota dial. If ZCode keeps its data elsewhere, choose the folder under **Custom Locations**.
 
 **SSH hosts.** Pacer follows the hosts you already use in Codex and Claude, including hosts added directly in Codex Desktop. A machine you reach through more than one entry is followed once. A host needs SSH access without a password prompt and Python 3. If a host disconnects, use **Retry** on the **Remote** page.
 

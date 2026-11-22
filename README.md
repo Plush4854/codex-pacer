@@ -5,7 +5,7 @@
 <h1 align="center">Codex Pacer</h1>
 
 <p align="center">
-  A Dynamic Island for <b>Codex</b>, <b>Claude Code</b>, <b>DeepSeek Harness</b> and <b>WorkBuddy</b>, on Mac and Windows.<br>
+  A Dynamic Island for <b>Codex</b>, <b>Claude Code</b>, <b>DeepSeek Harness</b>, <b>WorkBuddy</b> and <b>GLM ZCode</b>, on Mac and Windows.<br>
   See every running task, its progress and your quota without leaving what you're doing.
 </p>
 
@@ -26,7 +26,7 @@
 
 ## Features
 
-- **Progress for every task.** Codex, Claude Code, DeepSeek Harness and WorkBuddy report how much of your request is done. Each task shows it as a ring around its icon, and the collapsed bar can show the average.
+- **Progress for every task.** Codex, Claude Code, DeepSeek Harness, WorkBuddy and GLM ZCode report how much of your request is done. Each task shows it as a ring around its icon, and the collapsed bar can show the average.
 - **Every task in one place.** Tasks on this computer, on your SSH hosts, in WSL and in Claude's cloud Projects, each with its stage, model, speed and turn time.
 - **Know when you're needed.** A task waiting for your reply or approval turns the island amber, and a finished task stays until you've seen it. System notifications are optional.
 - **Jump back in.** Click a task to open its conversation in the app that runs it.
@@ -60,7 +60,7 @@ On first launch a short guide helps you pick a layout and the services to follow
 ## Requirements
 
 - macOS 14 or later (Apple silicon or Intel), or Windows 10 version 2004 or later (x64 or ARM64). Liquid Glass needs macOS 26 or Windows 11 22H2.
-- At least one of Codex, Claude Code, DeepSeek Harness or WorkBuddy, installed and signed in.
+- At least one of Codex, Claude Code, DeepSeek Harness, WorkBuddy or GLM ZCode, installed and signed in.
 - For SSH hosts: SSH access without a password prompt, and Python 3 on the host.
 
 ## Privacy
@@ -76,4 +76,4 @@ Bug reports and ideas are welcome in [Issues](https://github.com/RyanZhangNTU/co
 
 ## License
 
-[MIT](LICENSE). Codex Pacer is an independent project and is not affiliated with OpenAI, Anthropic, DeepSeek or Tencent. Codex, Claude, DeepSeek and WorkBuddy are trademarks of their respective owners. Codex Pacer includes the decompression part of [Zstandard](https://github.com/facebook/zstd) (BSD license).
+[MIT](LICENSE). Codex Pacer is an independent project and is not affiliated with OpenAI, Anthropic, DeepSeek, Tencent or Z.ai. Codex, Claude, DeepSeek, WorkBuddy and GLM are trademarks of their respective owners. Codex Pacer includes the decompression part of [Zstandard](https://github.com/facebook/zstd) (BSD license).

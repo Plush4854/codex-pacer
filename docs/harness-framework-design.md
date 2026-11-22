@@ -1,6 +1,6 @@
 # Harness modules
 
-A Harness is the app that runs a task and keeps its conversation. Codex, Claude Code, DeepSeek Harness, WorkBuddy and WorkBuddy AI are modules of one framework: the same registry, module modes, activity lifecycle and settings pages on both platforms. A WorkBuddy task stays a WorkBuddy task even when it runs a DeepSeek model.
+A Harness is the app that runs a task and keeps its conversation. Codex, Claude Code, DeepSeek Harness, WorkBuddy, WorkBuddy AI and GLM ZCode are modules of one framework: the same registry, module modes, activity lifecycle and settings pages on both platforms. A WorkBuddy task stays a WorkBuddy task even when it runs a DeepSeek model.
 
 ## The registry
 
@@ -87,6 +87,11 @@ A module not found on the computer stays in the Module Library, so most people, 
 | Progress | `pacer_progress` in `mcp.json` with a rule asking tasks to report; WorkBuddy asks the user to trust it once. On by default, like the other rings. `HarnessProgressGuide` turns the setup into steps until WorkBuddy reports progress. |
 
 Measurements and live checks are in [Harness validation](harness-validation.md).
+
+
+## GLM ZCode
+
+ZCode sends the same snake_case hook envelopes Claude Code does, for its seven events (`SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PermissionRequest`, `PostToolUse`, `PostToolUseFailure`, `Stop`), and runs them as argument vectors without a shell. The GLM module therefore reuses Pacer's Claude machinery under its own identity: `glm_hook.py` (a cut of the Claude adapter) writes the same spool, `ClaudeActivityReader` and `ClaudeActivityState` — parameterized by provider — read it back, and a `GLMHookInstaller` modeled on the Claude one merges Pacer's entries into `~/.zcode/cli/config.json`. ZCode runs configuration-file hooks only while `hooks.enabled` is true; Pacer sets that flag when it installs and restores the previous value on uninstall. There is no quota surface (no status line, no telemetry contract), so the module shows tasks only. On Windows the hook runs under Pacer's bundled Python through the same bootstrap, in its own runtime root so Claude's cleanup never reasons about ZCode homes.
 
 ## Prior art
 

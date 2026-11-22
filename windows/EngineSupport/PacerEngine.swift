@@ -55,11 +55,16 @@ public enum PacerEngine {
                 .appendingPathComponent("actions.json"), files: WindowsFileSystem())
         }
         var hookServices: EngineClaudeHookServices?
+        var glmServices: EngineGLMHookServices?
         if !demo && !readOnly, CommandLine.arguments.contains("--manage-claude-hooks"),
            let index = CommandLine.arguments.firstIndex(of: "--claude-runtime-root"), CommandLine.arguments.indices.contains(index + 1) {
             let path = CommandLine.arguments[index + 1]
             if path.utf16.count < 16000, WindowsCodexExecutableDiscovery.absolute(path), !path.unicodeScalars.contains(where: { CharacterSet.controlCharacters.contains($0) }) {
-                hookServices = .live(root: URL(fileURLWithPath: path, isDirectory: true))
+                let root = URL(fileURLWithPath: path, isDirectory: true)
+                hookServices = .live(root: root)
+                // The host's gate covers Pacer's hook runtimes; GLM keeps its
+                // own sibling root so Claude's cleanup never sees ZCode homes.
+                glmServices = .live(root: root.deletingLastPathComponent().appendingPathComponent("GLMRuntime", isDirectory: true))
             }
         }
         var progressRoot = WindowsCodexProgressPaths.defaultRoot
@@ -79,6 +84,7 @@ public enum PacerEngine {
             sshServices: ssh, claudeRemoteServices: .live(ssh: ssh, wsl: wsl),
             codexRemoteProgressServices: demo || readOnly ? nil : .codexProgress(ssh: ssh, wsl: wsl),
             allowsLiveClaudeWeb: !demo && !readOnly, claudeWebReference: claudeReference, claudeHookServices: hookServices,
+            glmHookServices: glmServices,
             codexHookServices: demo || readOnly ? nil : .live(runtimeRoot: progressRoot),
             managesCodexProgress: !demo && !readOnly, managesDeepSeekProgress: !demo && !readOnly, managesLocalHarnessProgress: !demo && !readOnly,
             codexProgressPaths: .init(root: progressRoot), allowsStorageRecovery: !readOnly)
@@ -147,6 +153,14 @@ actor EngineRuntime {
     }
     private var claudeHookHome: URL?, claudeHookRequest: UUID?
     private var claudeHooksEnabled = false
+    private let glmHookServices: EngineGLMHookServices?
+    private var glmHookSetup: EngineGLMHookSetup?
+    private var glmHookTask: Task<Void, Never>? {
+        get { ownedWork.task(.init(.setup, provider: .glm, identifier: "hooks")) }
+        set { setOwnedTask(newValue, key: .init(.setup, provider: .glm, identifier: "hooks")) }
+    }
+    private var glmHookHome: URL?, glmHookRequest: UUID?
+    private var glmHooksEnabled = false
     private let codexHookServices: EngineCodexHookServices?
     /// Not keyed to the Codex source: replacing the source (as initialization
     /// does) must not cancel the setup it started. A new home sets up again.
@@ -501,6 +515,7 @@ actor EngineRuntime {
          allowsLiveClaudeWeb: Bool = false,
          claudeWebReference: Bool = false,
          claudeHookServices: EngineClaudeHookServices? = nil,
+         glmHookServices: EngineGLMHookServices? = nil,
          codexHookServices: EngineCodexHookServices? = nil,
          managesCodexProgress: Bool = false,
          managesDeepSeekProgress: Bool = false,
@@ -529,6 +544,7 @@ actor EngineRuntime {
         self.activityHostServices = activityHostServices
         self.claudeWebReference = claudeWebReference && demo
         self.claudeHookServices = claudeHookServices
+        self.glmHookServices = glmHookServices
         self.codexHookServices = codexHookServices
         self.managesCodexProgress = managesCodexProgress; self.codexProgressPaths = codexProgressPaths
         self.managesDeepSeekProgress = managesDeepSeekProgress
@@ -1249,6 +1265,7 @@ actor EngineRuntime {
         scheduleCodexProgressSetup(force: durableChanged)
         scheduleCodexHooks()
         scheduleDeepSeekProgressSetup()
+        scheduleGLMHooks()
         for definition in localHarnesses.definitions { scheduleLocalHarnessProgress(definition) }
         boundWSLCompletionProfiles = wslCompletionProfiles
         bindCodexCompletionSources()
@@ -1379,6 +1396,7 @@ actor EngineRuntime {
     }
 
     private func bindLocalHarness(_ provider: AgentProvider) async {
+        if provider == .glm { scheduleGLMHooks() }
         guard enabled.contains(provider), let definition = localHarnesses.definition(for: provider) else { return }
         let context = lifecycle.version(provider)
         let monitor = localHarnesses.monitor(for: definition)
@@ -1575,6 +1593,30 @@ actor EngineRuntime {
         // Setup creates Pacer's hook folder, which the switch file needs, and
         // confirms that this engine manages that home.
         applyClaudeProgressSwitch(setupConfirmed: report.state == .ready)
+        publish(notices: [])
+    }
+    /// Installs Pacer's GLM hooks while the GLM module is on and removes them
+    /// when it is off, as the Claude hooks are; a moved data folder sets up
+    /// again.
+    private func scheduleGLMHooks(force: Bool = false) {
+        guard let services = glmHookServices else { return }
+        let active = enabled.contains(.glm),
+            home = localHarnesses.definition(for: .glm).map(localHarnessHome)
+                ?? URL(fileURLWithPath: ".zcode", isDirectory: true, relativeTo: FileManager.default.homeDirectoryForCurrentUser).standardizedFileURL
+        guard force || glmHookHome != home || glmHooksEnabled != active else { return }
+        glmHookTask?.cancel()
+        glmHookHome = home; glmHooksEnabled = active
+        let request = UUID(); glmHookRequest = request
+        glmHookSetup = .init(active ? .settingUp : .disabled)
+        glmHookTask = Task { [weak self] in
+            let result = await services.perform(active ? .ensure : .remove, home)
+            guard !Task.isCancelled else { return }
+            await self?.receiveGLMHookSetup(result, request: request, home: home)
+        }
+    }
+    private func receiveGLMHookSetup(_ report: EngineGLMHookSetup, request: UUID, home: URL) {
+        guard initialized, glmHookRequest == request, glmHookHome == home else { return }
+        glmHookTask = nil; glmHookSetup = report
         publish(notices: [])
     }
     /// Installs Pacer's Codex hooks while the Codex module is on and removes
@@ -3159,7 +3201,7 @@ actor EngineRuntime {
         // A reattached source may report the same rows as before sleep.
         // Send the first rebuilt projection so the host can leave its sleep UI.
         snapshotEmission = .init()
-        if !demo { scheduleClaudeHooks(); scheduleCodexHooks(force: true) }
+        if !demo { scheduleClaudeHooks(); scheduleCodexHooks(force: true); scheduleGLMHooks() }
         quotaMonitor = quotaServices.map { services in
             CodexQuotaMonitor(services: services, seed: codexQuotaState, now: now) { [weak self] state in await self?.receiveQuota(state) }
         }
@@ -3197,6 +3239,7 @@ actor EngineRuntime {
         stopWSLMonitoring()
         wslQuota = [:]
         claudeHookTask?.cancel(); claudeHookTask = nil; claudeHookRequest = nil; claudeHookHome = nil
+        glmHookTask?.cancel(); glmHookTask = nil; glmHookRequest = nil; glmHookHome = nil; glmHooksEnabled = false
         webHostPublication.reset(); publishedBalanceContext = nil
         cancelHostTracking(); invalidateNavigation()
         activityDisplayDeadline = nil

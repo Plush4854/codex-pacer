@@ -893,8 +893,33 @@ final class IslandModel: ObservableObject {
 
     /// - Parameter keepsState: keep showing the current state until the
     ///   result arrives, for checks the user did not ask for.
+    private var glmHookSetup: Task<Void, Never>?
+    private var glmHooksEnabled: Bool?
+    private var glmHookHome: URL?
+    /// GLM's hooks follow its module, as Claude's do: installed while it is on,
+    /// taken out when it is off, and set up again for a moved data folder.
+    func syncGLMHookSetup(force: Bool = false) {
+        guard !demo, !stopped else { return }
+        let enabled = isModuleEnabled(.glm)
+        let home = localHarnessHome(.glm)
+            ?? URL(fileURLWithPath: ".zcode", isDirectory: true, relativeTo: FileManager.default.homeDirectoryForCurrentUser).standardizedFileURL
+        guard force || glmHooksEnabled != enabled || glmHookHome != home else { return }
+        glmHooksEnabled = enabled; glmHookHome = home
+        let previous = glmHookSetup
+        glmHookSetup = Task { [weak self] in
+            _ = await previous?.value
+            guard let self, !self.stopped else { return }
+            _ = await Task.detached(priority: .utility) {
+                if enabled { _ = GLMHookInstaller.ensureInstalled(home: home) }
+                else { try? GLMHookInstaller.uninstall(home: home) }
+            }.value
+        }
+    }
+
     func syncLocalHarnessProgress(force provider: AgentProvider? = nil, inspectOnly: Bool = false, keepsState: Bool = false) {
-        guard !demo, !stopped, installationOverride == nil, let executable = Bundle.main.executableURL else { return }
+        guard !demo, !stopped else { return }
+        if provider == nil || provider == .glm { syncGLMHookSetup(force: provider == .glm) }
+        guard installationOverride == nil, let executable = Bundle.main.executableURL else { return }
         if provider == nil { refreshLocalHarnessApps() }
         for definition in localHarnesses.definitions {
             let id = definition.descriptor.id

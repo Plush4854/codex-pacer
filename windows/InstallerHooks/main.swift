@@ -38,6 +38,21 @@ do {
         try WindowsLocalHarnessProgressCleanup.unregister(executable: arguments[1], runtimeRoot: arguments[2], fixtureRoot: arguments[3],
             checkOnly: arguments[0] == "--check-uninstall-local-harness-progress")
         result = 0
+    } else if arguments.count == 3, ["--ensure-glm", "--inspect-glm", "--uninstall-glm-home"].contains(arguments[0]) {
+        let home = URL(fileURLWithPath: arguments[1], isDirectory: true)
+        let runtime = WindowsGLMHookRuntime(root: URL(fileURLWithPath: arguments[2], isDirectory: true))
+        if arguments[0] == "--uninstall-glm-home" {
+            try runtime.uninstallHome(home); result = 0
+        } else {
+            let report: WindowsGLMHookRuntime.Report
+            if arguments[0] == "--inspect-glm" { report = runtime.inspect(home: home) }
+            else {
+                let source = URL(fileURLWithPath: CommandLine.arguments[0]).deletingLastPathComponent().appendingPathComponent("Python", isDirectory: true)
+                report = runtime.ensure(home: home, package: source)
+            }
+            try FileHandle.standardOutput.write(contentsOf: JSONEncoder().encode(report) + Data([10]))
+            result = report.state == "failed" ? 1 : 0
+        }
     } else if arguments.count == 2, ["--uninstall", "--check-uninstall"].contains(arguments[0]) {
         try WindowsClaudeHookCleanup.uninstall(home: URL(fileURLWithPath: arguments[1], isDirectory: true),
             checkOnly: arguments[0] == "--check-uninstall")
@@ -66,7 +81,8 @@ do {
     }
 } catch {
     // No paths, provider settings, account data or record contents in diagnostics.
-    let provider = harnessCleanup || arguments.first == "--prepare-local-harness-progress" ? "local Harness" : deepseekCleanup ? "DeepSeek Harness"
+    let glmOperation = arguments.first.map { ["--ensure-glm", "--inspect-glm", "--uninstall-glm-home"].contains($0) } ?? false
+    let provider = glmOperation ? "GLM" : harnessCleanup || arguments.first == "--prepare-local-harness-progress" ? "local Harness" : deepseekCleanup ? "DeepSeek Harness"
         : codexCleanup || ["--prepare-codex-progress", "--prepare-codex-hook"].contains(arguments.first ?? "") ? "Codex" : "Claude"
     FileHandle.standardError.write(Data("Pacer could not safely update \(provider) configuration or its owned runtime.\n".utf8))
     result = 1
