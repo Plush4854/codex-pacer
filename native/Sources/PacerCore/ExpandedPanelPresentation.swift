@@ -39,10 +39,12 @@ public enum ExpandedPanelPresentation {
             switch block {
             case .tasks:
                 result.append(Section(kind: .tasks))
-            case .codex, .claude, .deepseek, .workbuddy, .workbuddyAI:
+            case .antigravity:
+                result.append(Section(kind: .quota, providers: [.antigravity]))
+            case .codex, .claude, .deepseek, .workbuddy, .workbuddyAI, .glm:
                 var group = [block.provider ?? .codex]
                 if options.quotaArrange == .pair {
-                    while index < visible.count, visible[index].isQuota, let provider = visible[index].provider {
+                    while index < visible.count, visible[index] != .antigravity, visible[index].isQuota, let provider = visible[index].provider {
                         group.append(provider); index += 1
                     }
                 }

@@ -88,7 +88,7 @@ enum WindowsNullDevice {
 }
 
 enum WindowsSubprocess {
-    static func capture(executable: URL, arguments: [String], timeout: TimeInterval, limit: Int,
+    static func capture(executable: URL, arguments: [String], timeout: TimeInterval, limit: Int, workingDirectory: URL? = nil,
                         environment: [String: String] = ProcessInfo.processInfo.environment) async -> Data? {
         guard executable.isFileURL, limit > 0, limit <= 1024 * 1024, timeout > 0, let null = WindowsNullDevice.shared else { return nil }
         return await withTaskGroup(of: Data?.self) { group in
@@ -99,7 +99,7 @@ enum WindowsSubprocess {
                     let path = executable.withUnsafeFileSystemRepresentation { String(cString: $0!) }
                     let variables = environment.reduce(into: [Environment.Key: String]()) { $0[Environment.Key(stringLiteral: $1.key)] = $1.value }
                     let result = try await Subprocess.run(.path(.init(path)), arguments: Arguments(arguments),
-                        environment: .custom(variables), platformOptions: options,
+                        environment: .custom(variables), workingDirectory: workingDirectory.map { .init($0.path) }, platformOptions: options,
                         input: .fileDescriptor(null.input, closeAfterSpawningProcess: false), output: .data(limit: limit),
                         error: .fileDescriptor(null.output, closeAfterSpawningProcess: false))
                     guard result.terminationStatus.isSuccess else { return nil }

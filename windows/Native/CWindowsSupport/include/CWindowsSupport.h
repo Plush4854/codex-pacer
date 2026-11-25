@@ -3,6 +3,12 @@
 #include <stddef.h>
 #include <stdint.h>
 int pacer_sha256(const uint8_t *bytes, size_t count, uint8_t output[32]);
+/* AES-256-GCM with a 32-byte key, a 12-byte nonce and a 16-byte tag. Both return
+   the byte count, -1 on failure and -2 when the tag does not match. */
+int pacer_aes256_gcm_open(const uint8_t *key, const uint8_t *nonce, const uint8_t *tag,
+                          const uint8_t *sealed, size_t count, uint8_t *plain);
+int pacer_aes256_gcm_seal(const uint8_t *key, const uint8_t *nonce, const uint8_t *plain,
+                          size_t count, uint8_t *sealed, uint8_t tag[16]);
 int pacer_replace_file(const uint16_t *source, const uint16_t *destination);
 typedef struct {
     uint64_t volume, file_low, file_high, size, modified, created;

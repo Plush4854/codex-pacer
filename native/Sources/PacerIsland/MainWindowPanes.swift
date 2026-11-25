@@ -111,7 +111,7 @@ struct OverviewPane: View {
                 deepseekContent
             } else if let descriptor = model.localHarnessDescriptors.first(where: { $0.id == provider }) {
                 // Like the other services: the dial, and a line only when local tasks need attention.
-                if descriptor.reportsAccountCredits { QuotaDashboardView(model: model, providers: [provider]) }
+                if descriptor.reportsAccountCredits || descriptor.hasQuotaWindows { QuotaDashboardView(model: model, providers: [provider]) }
                 if let problem = localTaskProblem(provider) {
                     Text(problem).font(.system(size: 12)).foregroundStyle(MainPalette.attention)
                         .fixedSize(horizontal: false, vertical: true)

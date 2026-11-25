@@ -17,7 +17,9 @@ internal sealed record EngineSnapshot(
     IReadOnlyList<ClaudeRemoteSetup>? ClaudeRemoteSetups = null, ConnectionPage? Connections = null, string? CodexProgressSetup = null,
     string? DeepSeekProgressSetup = null, EngineExpandedPanel? ExpandedPanel = null,
     string? WslAvailability = null,
-    IReadOnlyList<EngineAccountCredits>? AccountCredits = null, CodexHooks? CodexHooks = null);
+    IReadOnlyList<EngineAccountCredits>? AccountCredits = null, CodexHooks? CodexHooks = null, EngineAntigravityQuota? AntigravityQuota = null);
+internal sealed record EngineAntigravityQuota(IReadOnlyList<EngineAntigravityWindow> Windows, bool Configured);
+internal sealed record EngineAntigravityWindow(string Id, double? Percent, double? Amount, double? ResetsAt, bool Stale);
 /// Codex task tracking through Pacer's hooks: `off`, `settingUp`, `notInstalled`,
 /// `needsApproval` (Pending of Pacer's hooks still to allow in Codex), `running`,
 /// `notRunning`, `needsCodexUpdate` or `installFailed`.

@@ -347,7 +347,7 @@ internal sealed partial class SettingsWindow
         // pace tick and dial, but not its block order or which blocks show.
         var panel = snapshot.ExpandedPanel;
         var choices = panel?.Options ?? PanelOptions.Default;
-        if (HarnessPane(provider) && HarnessModule(provider) is { } module)
+        if (HarnessPane(provider) && HarnessModule(provider) is { } module && module.Balance != "quotaWindows")
         {
             if (module.ReportsAccountCredits == true)
                 content.Children.Add(HarnessAccountCard.Build(ui, provider, harnessAccounts?[provider],
@@ -369,7 +369,9 @@ internal sealed partial class SettingsWindow
                 ? new QuotaConnectionView(provider, connection, ui, () => engine!.SendAsync("retryQuota", new { provider }), () => _ = NavigateAsync(provider)) : null;
             var gauge = panel?.Gauge(provider);
             FrameworkElement view = session.Current.ExpandedQuotaStyle == "classic" || !choices.QuotaDetails
-                ? new QuotaCell(provider, raw, snapshot.Wallet, help, reading, status, gauge, choices.PaceTick) { HorizontalAlignment = HorizontalAlignment.Left }
+                ? new QuotaCell(provider, raw, snapshot.Wallet, help, reading, status, gauge, choices.PaceTick,
+                    name: HarnessModule(provider)?.DisplayName, symbol: HarnessModule(provider)?.Symbol is { } symbol ? GuideArt.Symbol(symbol) : null)
+                    { HorizontalAlignment = HorizontalAlignment.Left }
                 // The details take the rest of the card, so each value lines up at its right edge as on the Mac.
                 : new SingleQuotaView(reading, raw, ui, help, status, gauge, choices.PaceTick);
             content.Children.Add(view);

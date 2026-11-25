@@ -215,8 +215,11 @@ internal static class Program
             EngineSnapshot? latest = null;
             client.Snapshot += value => latest = value;
             await client.StartAsync(engine, true, saved!.Language, saved.EngineConfiguration(), referenceFixture: true);
-            Check(latest?.Modules?.Count == 5 && latest.Modules.Single(value => value.Provider == "codex") is { Mode: "disabled", Enabled: false }
-                && latest.Modules.Single(value => value.Provider == "claude") is { Mode: "automatic", Enabled: true }, "Saved modes must control the real projection");
+            Check(latest?.Modules is { } modules && modules.Single(value => value.Provider == "codex") is { Mode: "disabled", Enabled: false }
+                && modules.Single(value => value.Provider == "claude") is { Mode: "automatic", Enabled: true }, "Saved modes must control the real projection");
+            Check(latest!.Modules!.Single(value => value.Provider == "antigravity") is
+                { Mode: "automatic", HasTaskProgress: true, ProgressConnector: false, ProgressGuide: null },
+                "Antigravity exposes its progress switch without a manual Connectors guide");
             // Codex and DeepSeek are off in the saved fixture; Claude and the automatic WorkBuddy modules stay.
             Check(latest!.Tasks.Count > 0 && latest.Tasks.All(value => value.Provider is "claude" or "workbuddy" or "workbuddy-ai" && value.Title == "本地任务")
                 && latest.Wallet == null, "Saved privacy and module choices must apply before the first snapshot");

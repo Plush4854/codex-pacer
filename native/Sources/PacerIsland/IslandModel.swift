@@ -208,6 +208,10 @@ final class IslandModel: ObservableObject {
             switch selectedProvider {
             case .codex: codexQuota = newValue
             case .claude: claudeQuota = newValue
+            case .glm: glmQuotaReading = glmQuotaReading.map {
+                .init(context: $0.context, enabled: $0.enabled, refreshing: $0.refreshing, snapshot: newValue, error: $0.error,
+                      failure: $0.failure, lastAttempt: $0.lastAttempt, failureCount: $0.failureCount)
+            }
             default: return
             }
             onLayoutChange?()
@@ -273,6 +277,7 @@ final class IslandModel: ObservableObject {
         case .codex: codexRefreshing
         case .claude: claudeRefreshing
         case .deepseek: deepseekRefreshing
+        case .glm: glmQuotaBusy
         default: false
         }
     }
@@ -300,6 +305,7 @@ final class IslandModel: ObservableObject {
         switch provider {
         case .codex: codexQuota
         case .claude: claudeQuota
+        case .glm: glmQuotaReading?.snapshot
         default: nil
         }
     }
@@ -308,6 +314,7 @@ final class IslandModel: ObservableObject {
         case .codex: codexErrorMessage
         case .claude: claudeErrorMessage
         case .deepseek: deepseekBalanceError?.errorDescription
+        case .glm: glmQuotaReading?.error
         default: nil
         }
     }
@@ -896,13 +903,54 @@ final class IslandModel: ObservableObject {
     private var glmHookSetup: Task<Void, Never>?
     private var glmHooksEnabled: Bool?
     private var glmHookHome: URL?
+    private var glmQuotaCoordinator: GLMQuotaCoordinator?
+    private var glmQuotaReading: GLMQuotaState?
+    private var glmQuotaBusy = false
     /// GLM's hooks follow its module, as Claude's do: installed while it is on,
     /// taken out when it is off, and set up again for a moved data folder.
+    private var glmHome: URL {
+        localHarnessHome(.glm)
+            ?? URL(fileURLWithPath: ".zcode", isDirectory: true, relativeTo: FileManager.default.homeDirectoryForCurrentUser).standardizedFileURL
+    }
+    /// GLM usage follows its module, as Codex's and Claude's do: read while it
+    /// is on, from the data folder ZCode keeps the plan's key in.
+    private func refreshGLMQuota(force: Bool = true) {
+        guard !demo, !sleeping, !stopped, isModuleEnabled(.glm), !glmQuotaBusy else { return }
+        guard ProviderQuotaRefreshPolicy.isDue(lastAttempt: glmQuotaReading?.lastAttempt, expanded: visiblyExpanded,
+            failures: glmQuotaReading?.failureCount ?? 0, now: Date(), force: force) else { return }
+        let generation = sourceGeneration, home = glmHome
+        glmQuotaBusy = true
+        launchOwnedWork(.init(.quota, provider: .glm)) { [weak self] _ in
+            guard let self else { return }
+            defer { self.glmQuotaBusy = false }
+            guard generation == self.sourceGeneration, !Task.isCancelled else { return }
+            let coordinator: GLMQuotaCoordinator
+            if let current = self.glmQuotaCoordinator { coordinator = current }
+            else {
+                coordinator = GLMQuotaCoordinator(services: .glmLive, seed: self.glmQuotaReading) { [weak self] state in
+                    await self?.receiveGLMQuota(state)
+                }
+                self.glmQuotaCoordinator = coordinator
+            }
+            await coordinator.configure(home: home, enabled: true, context: UInt64(generation))
+            _ = await coordinator.refreshIfDue(expanded: self.visiblyExpanded, force: force)
+            await coordinator.waitForRefresh()
+        }
+    }
+    private func receiveGLMQuota(_ state: GLMQuotaState) {
+        guard !stopped, !sleeping, state.context == UInt64(sourceGeneration) else { return }
+        glmQuotaReading = state
+        onStatusChange?()
+    }
+    private func detachGLMQuota() -> GLMQuotaCoordinator? {
+        let previous = glmQuotaCoordinator
+        glmQuotaCoordinator = nil; glmQuotaBusy = false
+        return previous
+    }
     func syncGLMHookSetup(force: Bool = false) {
         guard !demo, !stopped else { return }
         let enabled = isModuleEnabled(.glm)
-        let home = localHarnessHome(.glm)
-            ?? URL(fileURLWithPath: ".zcode", isDirectory: true, relativeTo: FileManager.default.homeDirectoryForCurrentUser).standardizedFileURL
+        let home = glmHome
         guard force || glmHooksEnabled != enabled || glmHookHome != home else { return }
         glmHooksEnabled = enabled; glmHookHome = home
         let previous = glmHookSetup
@@ -2019,6 +2067,7 @@ final class IslandModel: ObservableObject {
         let balance = cancelDeepSeekBalanceRead(stop: false)
         let deadline = ShutdownDeadline()
         let quota = detachCodexQuota(), claudeQuota = detachClaudeQuota(), cloud = claudeCloudCoordinator
+        await detachGLMQuota()?.stop()
         let harnesses = detachLocalHarnesses()
         await ApplicationLifecycleCoordinator.cleanup([
             .codexQuota: { await quota?.stop() }, .claudeQuota: { await claudeQuota?.stop() },
@@ -2176,6 +2225,7 @@ final class IslandModel: ObservableObject {
     func refreshQuota() {
         refreshCodexQuota()
         refreshClaudeQuota()
+        refreshGLMQuota()
         refreshDeepSeekBalance()
     }
     private func refreshCodexQuota(force: Bool = true) {
@@ -2250,6 +2300,7 @@ final class IslandModel: ObservableObject {
     }
     func retryQuotaConnection(for provider: AgentProvider) {
         if provider == .claude { retryClaudeWebConnection(); return }
+        if provider == .glm { refreshGLMQuota(); return }
         guard !codexRefreshing else { return }
         let previous = detachCodexQuota(), generation = sourceGeneration
         launchOwnedWork(.init(.quotaRestart, provider: .codex)) { [weak self] _ in
@@ -2895,6 +2946,7 @@ final class IslandModel: ObservableObject {
         let balance = cancelDeepSeekBalanceRead(stop: false)
         let deadline = ShutdownDeadline()
         let quota = detachCodexQuota(), claudeQuota = detachClaudeQuota(), cloud = claudeCloudCoordinator
+        await detachGLMQuota()?.stop()
         let setup = claudeRemoteSetup
         let harnesses = detachLocalHarnesses()
         let progressFlag = codexProgressFlagTask
@@ -2998,6 +3050,7 @@ final class IslandModel: ObservableObject {
                 case .codex: refreshCodexQuota(force: force)
                 case .claude: refreshClaudeQuota(force: force)
                 case .deepseek: refreshDeepSeekBalance(scheduled: !force, active: active)
+                case .glm: refreshGLMQuota(force: force)
                 default: break
                 }
             case .activity(let provider): activityAdapters[provider]?.start()

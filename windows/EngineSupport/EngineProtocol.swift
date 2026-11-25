@@ -395,6 +395,7 @@ struct EngineSnapshot: Codable, Equatable {
     let navigationError: EngineNavigationFailure?
     let openingActivityIDs: [String]?
     var expandedPanel: EngineExpandedPanel? = nil
+    var antigravityQuota: WindowsAntigravityQuota.Presentation? = nil
     var accountCredits: [EngineAccountCredits]? = nil
     /// Codex task tracking through Pacer's hooks; nil while Codex is not managed.
     var codexHooks: EngineCodexHooks? = nil

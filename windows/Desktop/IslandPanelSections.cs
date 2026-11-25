@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Text.Json;
 using System.Windows;
@@ -43,7 +44,7 @@ public partial class IslandWindow
     private bool tasksShown = true;
     private QuotaParts? firstQuota;
     private readonly List<QuotaParts> extraQuota = [];
-    private ChartParts? spendSection, weekSection;
+    private ChartParts? spendSection, weekSection, antigravitySection;
     private readonly List<FrameworkElement> sectionHeaders = [];
 
     /// Rows on one task page and their height, from the panel's choices.
@@ -108,14 +109,14 @@ public partial class IslandWindow
     private ChartParts Chart(ref ChartParts? parts, string id)
     {
         if (parts != null) return parts;
-        var (header, title, detail, trailing) = SectionHeader();
+        var (header, title, detail, trailing) = SectionHeader(id == "antigravity" ? id : null);
         var content = new Border { Margin = new Thickness(9, 0, 9, 4) };
         var section = new StackPanel(); section.Children.Add(header); section.Children.Add(content);
         AutomationProperties.SetAutomationId(section, "island.section." + id);
         return parts = new(section, header, title, detail, trailing, content);
     }
 
-    private static (Grid Header, TextBlock Title, TextBlock Detail, StackPanel Trailing) SectionHeader()
+    private static (Grid Header, TextBlock Title, TextBlock Detail, StackPanel Trailing) SectionHeader(string? provider = null)
     {
         var header = new Grid { Height = 24, Margin = new Thickness(9, 0, 9, 0) };
         header.ColumnDefinitions.Add(new() { Width = GridLength.Auto }); header.ColumnDefinitions.Add(new()); header.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
@@ -123,10 +124,92 @@ public partial class IslandWindow
         var title = new TextBlock { FontSize = 11, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center };
         title.SetResourceReference(TextBlock.ForegroundProperty, "Island.Secondary");
         var detail = new TextBlock { FontSize = 11, FontWeight = FontWeights.Medium, Margin = new Thickness(6, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center, Visibility = Visibility.Collapsed };
+        if (provider != null) names.Children.Add(ProviderIcon.Caption(provider));
         names.Children.Add(title); names.Children.Add(detail); header.Children.Add(names);
         var trailing = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, -2, 0, -2) };
         Grid.SetColumn(trailing, 2); header.Children.Add(trailing);
         return (header, title, detail, trailing);
+    }
+
+    private FrameworkElement BuildAntigravityQuota(EngineAntigravityQuota? quota)
+    {
+        var rows = new StackPanel { Margin = new Thickness(0, 5, 0, 2) };
+        TextBlock Line(string text, string ink, double size = 12)
+        {
+            var label = new TextBlock { Text = text, FontSize = size, TextWrapping = TextWrapping.Wrap };
+            label.SetResourceReference(TextBlock.ForegroundProperty, ink);
+            return label;
+        }
+        if (quota?.Windows is not { Count: > 0 } windows)
+        {
+            rows.Children.Add(Line(ui.Text("antigravity.quota.waiting"), "Island.Secondary"));
+            return rows;
+        }
+        foreach (var group in windows.OrderBy(reading => AntigravityQuotaGroup(reading.Id)).ThenBy(reading => reading.Id, StringComparer.Ordinal)
+                     .GroupBy(reading => AntigravityQuotaGroup(reading.Id)))
+        {
+            if (group.Key < 2)
+            {
+                var title = Line(ui.Text(group.Key == 0 ? "antigravity.quota.gemini" : "antigravity.quota.claude_gpt"), "Island.Primary");
+                title.FontWeight = FontWeights.SemiBold;
+                title.Margin = new Thickness(0, rows.Children.Count == 0 ? 2 : 8, 0, 3);
+                rows.Children.Add(title);
+            }
+            foreach (var reading in group)
+            {
+                var row = new StackPanel { Margin = new Thickness(0, 2, 0, 4) };
+                var labels = new Grid();
+                labels.ColumnDefinitions.Add(new());
+                labels.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
+                string title = group.Key == 2 ? reading.Id.Replace('-', ' ').Replace('_', ' ')
+                    : ui.Text(reading.Id.EndsWith("-5h", StringComparison.Ordinal) ? "antigravity.quota.five_hours" : "antigravity.quota.weekly");
+                labels.Children.Add(Line(title, "Island.Secondary"));
+                string value = reading.Percent is double percent ? percent.ToString("0.#", CultureInfo.CurrentCulture) + "%"
+                    : reading.Amount?.ToString("0.##", CultureInfo.CurrentCulture) ?? "";
+                var label = Line(value, reading.Stale ? "Island.Secondary" : "Island.Primary");
+                label.FontWeight = FontWeights.SemiBold;
+                label.Margin = new Thickness(8, 0, 0, 0);
+                Grid.SetColumn(label, 1);
+                labels.Children.Add(label);
+                row.Children.Add(labels);
+                if (reading.Percent is double remaining) row.Children.Add(BuildAntigravityQuotaBar(remaining, reading.Stale));
+                if (reading.ResetsAt is double seconds && seconds is > 0 and < 253402300799)
+                {
+                    var local = DateTimeOffset.FromUnixTimeSeconds((long)seconds).ToLocalTime();
+                    var reset = string.Format(CultureInfo.CurrentCulture, ui.Text("antigravity.quota.reset"), local.ToString("g"));
+                    row.Children.Add(Line(reset, "Island.Secondary", 10));
+                }
+                rows.Children.Add(row);
+            }
+        }
+        if (windows.Any(reading => reading.Stale)) rows.Children.Add(Line(ui.Text("antigravity.quota.stale"), "Island.Secondary", 10));
+        return rows;
+    }
+
+    private static int AntigravityQuotaGroup(string id) => id switch
+    {
+        "gemini-5h" or "gemini-weekly" => 0,
+        "3p-5h" or "3p-weekly" => 1,
+        _ => 2,
+    };
+
+    private static FrameworkElement BuildAntigravityQuotaBar(double percent, bool stale)
+    {
+        double remaining = Math.Clamp(percent, 0, 100);
+        var meter = new Grid { Height = 5, Margin = new Thickness(0, 4, 0, 3), FlowDirection = FlowDirection.LeftToRight };
+        meter.ColumnDefinitions.Add(new() { Width = new GridLength(remaining, GridUnitType.Star) });
+        meter.ColumnDefinitions.Add(new() { Width = new GridLength(100 - remaining, GridUnitType.Star) });
+        var track = new Border { CornerRadius = new CornerRadius(2.5) };
+        track.SetResourceReference(Border.BackgroundProperty, "Island.Overlay16");
+        Grid.SetColumnSpan(track, 2);
+        meter.Children.Add(track);
+        if (remaining > 0)
+        {
+            var fill = new Border { CornerRadius = track.CornerRadius, Background = PacerPalette.Provider("antigravity"), Opacity = stale ? 0.45 : 1 };
+            if (SystemParameters.HighContrast) fill.SetResourceReference(Border.BackgroundProperty, SystemColors.HighlightBrushKey);
+            meter.Children.Add(fill);
+        }
+        return meter;
     }
 
     private static void SetDetail(TextBlock detail, string? text, string? provider)
@@ -164,6 +247,18 @@ public partial class IslandWindow
                 case "tasks":
                     placed.Add((section, TasksSection, TaskHeaderTrailing, TaskToolbar));
                     break;
+                case "quota" when section.Providers is ["antigravity"]:
+                {
+                    var parts = Chart(ref antigravitySection, "antigravity");
+                    parts.Title.Text = ui.Text("panel.block.antigravity");
+                    if (Redraw(parts.Content, snapshot.AntigravityQuota ?? new EngineAntigravityQuota([], false)))
+                    {
+                        parts.Content.Child = BuildAntigravityQuota(snapshot.AntigravityQuota);
+                        changed = true;
+                    }
+                    placed.Add((section, parts.Section, parts.Trailing, parts.Header));
+                    break;
+                }
                 case "quota" when section.Providers.Count > 0:
                 {
                     var parts = quotaIndex == 0 ? FirstQuota : ExtraQuota(quotaIndex - 1);
@@ -374,6 +469,8 @@ public partial class IslandWindow
         var options = panelOptions;
         DashboardProvider? Reading(string provider) => dashboard?.Providers.FirstOrDefault(value => value.Provider == provider);
         string? Help(string provider) => snapshot.Sources.FirstOrDefault(source => source.Provider == provider && source.Transport == "app-server")?.Reason;
+        string? Name(string provider) => snapshot.Modules?.FirstOrDefault(module => module.Provider == provider)?.DisplayName;
+        string? Symbol(string provider) => snapshot.Modules?.FirstOrDefault(module => module.Provider == provider)?.Symbol is { } symbol ? GuideArt.Symbol(symbol) : null;
         bool deepseek = section.Providers.Contains("deepseek") || layout?.Slots.Any(slot => slot.Provider == "deepseek") == true;
         var creditModules = section.Providers.Where(provider => ReportsCredits(snapshot, provider)).ToArray();
         bool accountCredits = creditModules.Length > 0;
@@ -422,7 +519,8 @@ public partial class IslandWindow
                     "deepseek" => new DeepSeekQuotaCell(snapshot.Wallet, ui, connectAction: DeepSeekConnectAction(snapshot), connectUnavailable: connectUnavailable,
                         balanceStatus: DeepSeekStatus(snapshot), budgetDial: panelBudgetDial),
                     var provider => new QuotaCell(provider, snapshot.Quota.FirstOrDefault(q => q.Provider == provider), snapshot.Wallet, Help(provider),
-                        reading, QuotaStatus(reading), panel?.Gauge(provider), options.PaceTick, below: provider == "codex" ? resets : null)
+                        reading, QuotaStatus(reading), panel?.Gauge(provider), options.PaceTick, below: provider == "codex" ? resets : null,
+                        name: Name(provider), symbol: Symbol(provider))
                 };
                 QuotaCells.Add(slots, cell, index, layout?.Columns ?? providers.Length);
             }

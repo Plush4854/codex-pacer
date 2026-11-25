@@ -34,9 +34,10 @@ final class GLMHarnessTests: XCTestCase {
     func testTheModuleRegistersThroughTheSharedFramework() throws {
         let descriptor = try XCTUnwrap(HarnessRegistry.descriptor(for: .glm))
         XCTAssertEqual(descriptor.name, "GLM ZCode")
-        XCTAssertTrue(descriptor.hasTaskProgress)
+        XCTAssertFalse(descriptor.hasTaskProgress, "GLM does not report an estimate yet, so no progress ring is offered")
         XCTAssertFalse(descriptor.hasRateDisplay)
-        XCTAssertNil(descriptor.balance)
+        XCTAssertEqual(descriptor.balance, .quotaWindows)
+        XCTAssertTrue(descriptor.hasQuotaWindows)
         XCTAssertTrue(HarnessRegistry.ids.contains(.glm))
         XCTAssertFalse(HarnessRegistry.legacyIDs.contains(.glm))
         let definition = try XCTUnwrap(HarnessRegistry.localHarnesses.first { $0.descriptor.id == .glm })

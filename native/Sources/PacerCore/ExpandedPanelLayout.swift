@@ -8,6 +8,7 @@ public struct ExpandedPanelLayout: Equatable, Codable, Sendable {
     public enum Block: String, CaseIterable, Codable, Sendable, Identifiable {
         case tasks, codex, claude, deepseek, deepseekSpend, deepseekWeek, workbuddy
         case workbuddyAI = "workbuddy-ai"
+        case glm, antigravity
         public var id: String { rawValue }
         public var label: String { L10n.text("panel.block." + rawValue) }
         public var detail: String { L10n.text("panel.block_detail." + rawValue) }
@@ -22,11 +23,14 @@ public struct ExpandedPanelLayout: Equatable, Codable, Sendable {
             case .deepseek, .deepseekSpend, .deepseekWeek: .deepseek
             case .workbuddy: .workbuddy
             case .workbuddyAI: .workbuddyAI
+            case .glm: .glm
+            case .antigravity: .antigravity
             }
         }
         /// Adjacent quota blocks share one row when the panel pairs them.
         public var isQuota: Bool {
-            provider.flatMap(HarnessRegistry.descriptor(for:)).map { descriptor in
+            if self == .antigravity { return true }
+            return provider.flatMap(HarnessRegistry.descriptor(for:)).map { descriptor in
                 (descriptor.hasQuotaDisplay || descriptor.reportsAccountCredits) && self != .deepseekSpend && self != .deepseekWeek
             } ?? false
         }
@@ -40,6 +44,8 @@ public struct ExpandedPanelLayout: Equatable, Codable, Sendable {
             case .deepseekSpend: "chart.pie"
             case .deepseekWeek: "chart.xyaxis.line"
             case .workbuddy, .workbuddyAI: "briefcase"
+            case .glm: "sparkles"
+            case .antigravity: "sparkle"
             }
         }
         public func isAvailable(for providers: Set<AgentProvider>) -> Bool { provider.map(providers.contains) ?? true }
@@ -70,7 +76,7 @@ public struct ExpandedPanelLayout: Equatable, Codable, Sendable {
     /// content was Detailed. Services that are off keep their places, so the
     /// first edit saves a block that shows once its service is turned on.
     public static func automatic(providers: Set<AgentProvider>, deepseekDetailed: Bool) -> Self {
-        var blocks: [Block] = [.tasks, .codex, .claude, .deepseek, .workbuddy, .workbuddyAI]
+        var blocks: [Block] = [.tasks, .codex, .claude, .deepseek, .workbuddy, .workbuddyAI, .glm, .antigravity]
         let quotaProviders = providers.filter { HarnessRegistry.descriptor(for: $0)?.hasQuotaDisplay == true }
         if deepseekDetailed, quotaProviders == [.deepseek] { blocks += [.deepseekSpend, .deepseekWeek] }
         return Self(blocks: blocks)
@@ -220,6 +226,7 @@ public struct ExpandedPanelOptions: Codable, Equatable, Sendable {
     public var rowFields: Set<RowField> = Set(RowField.allCases)
     public var codexPeriods: Periods = .both
     public var claudePeriods: Periods = .both
+    public var glmPeriods: Periods = .both
     public var quotaArrange: Arrange = .pair
     /// Pace, reset and forecast beside a service that has a row to itself.
     public var quotaDetails = true
@@ -248,12 +255,14 @@ public struct ExpandedPanelOptions: Codable, Equatable, Sendable {
         switch provider {
         case .codex: codexPeriods
         case .claude: claudePeriods
+        case .glm: glmPeriods
         default: .both
         }
     }
 
     public mutating func setPeriods(_ value: Periods, for provider: AgentProvider) {
         if provider == .codex { codexPeriods = value } else if provider == .claude { claudePeriods = value }
+        else if provider == .glm { glmPeriods = value }
     }
 
     /// Whether a row draws the field in the chosen style.
@@ -265,7 +274,7 @@ public struct ExpandedPanelOptions: Codable, Equatable, Sendable {
     public func showsBudgetDial(hasBudget: Bool) -> Bool { hasBudget && deepseekDial == .budget }
 
     private enum CodingKeys: String, CodingKey {
-        case version, pageSize, rowStyle, rowFields, codexPeriods, claudePeriods, quotaArrange, quotaDetails, paceTick,
+        case version, pageSize, rowStyle, rowFields, codexPeriods, claudePeriods, glmPeriods, quotaArrange, quotaDetails, paceTick,
              codexResets, deepseekDial, deepseekPeak, spendTasks, spendElsewhere, weekLine, headerActions
     }
 
@@ -285,6 +294,7 @@ public struct ExpandedPanelOptions: Codable, Equatable, Sendable {
         rowFields = set(.rowFields, defaults.rowFields)
         codexPeriods = field(.codexPeriods, defaults.codexPeriods)
         claudePeriods = field(.claudePeriods, defaults.claudePeriods)
+        glmPeriods = field(.glmPeriods, defaults.glmPeriods)
         quotaArrange = field(.quotaArrange, defaults.quotaArrange)
         quotaDetails = field(.quotaDetails, defaults.quotaDetails)
         paceTick = field(.paceTick, defaults.paceTick)
@@ -306,6 +316,7 @@ public struct ExpandedPanelOptions: Codable, Equatable, Sendable {
         try values.encode(RowField.allCases.filter(rowFields.contains), forKey: .rowFields)
         try values.encode(codexPeriods, forKey: .codexPeriods)
         try values.encode(claudePeriods, forKey: .claudePeriods)
+        try values.encode(glmPeriods, forKey: .glmPeriods)
         try values.encode(quotaArrange, forKey: .quotaArrange)
         try values.encode(quotaDetails, forKey: .quotaDetails)
         try values.encode(paceTick, forKey: .paceTick)

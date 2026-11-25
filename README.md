@@ -5,7 +5,7 @@
 <h1 align="center">Codex Pacer</h1>
 
 <p align="center">
-  A Dynamic Island for <b>Codex</b>, <b>Claude Code</b>, <b>DeepSeek Harness</b>, <b>WorkBuddy</b> and <b>GLM ZCode</b>, on Mac and Windows.<br>
+  A Dynamic Island for <b>Codex</b>, <b>Claude Code</b>, <b>DeepSeek Harness</b>, <b>WorkBuddy</b> and <b>GLM ZCode</b>, on Mac and Windows. Also supports <b>Google Antigravity</b> on Windows.<br>
   See every running task, its progress and your quota without leaving what you're doing.
 </p>
 
@@ -26,13 +26,15 @@
 
 ## Features
 
-- **Progress for every task.** Codex, Claude Code, DeepSeek Harness, WorkBuddy and GLM ZCode report how much of your request is done. Each task shows it as a ring around its icon, and the collapsed bar can show the average.
+- **Progress for every task.** Codex, Claude Code, DeepSeek Harness and WorkBuddy report how much of your request is done. Each task shows it as a ring around its icon, and the collapsed bar can show the average.
 - **Every task in one place.** Tasks on this computer, on your SSH hosts, in WSL and in Claude's cloud Projects, each with its stage, model, speed and turn time.
 - **Know when you're needed.** A task waiting for your reply or approval turns the island amber, and a finished task stays until you've seen it. System notifications are optional.
 - **Jump back in.** Click a task to open its conversation in the app that runs it.
 - **Quota with pace.** Each service's 5-hour and weekly quota on one ring, with a tick that shows whether you're ahead of or behind an even pace, and a forecast for the reset.
 - **DeepSeek balance and budgets.** Today's spend on a 24-hour dial with the peak-price hours marked, or daily and weekly budgets paced like quota. Spending elsewhere on your account counts too.
 - **WorkBuddy credits.** WorkBuddy and WorkBuddy AI show the month's credits, any extra credits and when they expire, with reminders before they run low or lapse.
+- **GLM usage.** GLM ZCode shows its coding plan's 5-hour and weekly usage, read from Z.ai with the plan key ZCode already keeps.
+- **Antigravity on Windows.** Follow App and IDE tasks and let Pacer refresh quota through a signed-in Antigravity CLI. See Gemini and Claude/GPT limits as horizontal bars.
 - **Only the services you use.** Settings lists the services found on this computer. Turn on or get the others in the Module Library.
 - **Overview and history.** The main window opens on everything that needs you, with each service's quota history.
 - **English and Simplified Chinese.**
@@ -60,13 +62,14 @@ On first launch a short guide helps you pick a layout and the services to follow
 ## Requirements
 
 - macOS 14 or later (Apple silicon or Intel), or Windows 10 version 2004 or later (x64 or ARM64). Liquid Glass needs macOS 26 or Windows 11 22H2.
-- At least one of Codex, Claude Code, DeepSeek Harness, WorkBuddy or GLM ZCode, installed and signed in.
+- At least one supported service installed and signed in. Antigravity quota requires the signed-in Antigravity CLI on Windows.
 - For SSH hosts: SSH access without a password prompt, and Python 3 on the host.
 
 ## Privacy
 
 - No account and no analytics. Pacer reads the logs your agents already write and keeps only what the island shows: task titles, stages, timing and token counts. It never keeps your prompts or replies.
 - Claude, DeepSeek and WorkBuddy sign in inside Pacer's own window. Pacer never reads other apps' passwords or browser cookies.
+- GLM usage needs no sign-in: Pacer opens the coding-plan key ZCode keeps for your account, sends it only to Z.ai's usage service, and stores nothing of it.
 - Anything Pacer adds to your agents' settings is removed when you turn that feature off.
 - **Hide Project Names** keeps task titles off screen when you share it.
 

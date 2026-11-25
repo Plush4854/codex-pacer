@@ -124,7 +124,9 @@ Once you trust it, the steps fold away into one line: it works in new WorkBuddy 
 
 After you click **Open** or **Restart**, a small floating guide shows in the corner of your screen. WorkBuddy takes some seconds to start and show its connectors, so the guide first asks you to wait, then shows steps 4 and 5, each with a picture of what to click. It follows along as you click, even with Settings closed, and needs no permission. It closes by itself when you're done, or with its close button. If you turn the tool off or remove it in WorkBuddy and then turn the ring off and on, Pacer asks you to restart WorkBuddy so it reads the tool again. If a Pacer update changes the tool, WorkBuddy asks you to trust it again, and the sidebar, Overview and the expanded panel say so. Turning the ring off removes the tool. If WorkBuddy keeps its data elsewhere, choose the folder under **Custom Locations**.
 
-**GLM ZCode.** Pacer follows GLM's ZCode tasks on this computer: running work, questions waiting for you and finished turns. Task tracking sets itself up when the GLM module is on; restart running ZCode sessions once afterwards. Pacer adds its hooks to ZCode's configuration and keeps them current while the module is on, and takes them out when it is turned off. GLM's coding plan has no rate-limit window to read, so there is no quota dial. If ZCode keeps its data elsewhere, choose the folder under **Custom Locations**.
+**GLM ZCode.** Pacer follows GLM's ZCode tasks on this computer: running work, questions waiting for you and finished turns. Task tracking sets itself up when the GLM module is on; restart running ZCode sessions once afterwards. Pacer adds its hooks to ZCode's configuration and keeps them current while the module is on, and takes them out when it is turned off. It also shows your coding plan's 5-hour and weekly usage, read from Z.ai about every two minutes with the plan key ZCode keeps for the account you signed in to there, so it needs no sign-in of its own. On a Mac, the first reading may ask you to let Pacer read that one keychain item. Team plans are not read yet, and GLM does not report how much of a request is done, so its tasks show no progress ring. If ZCode keeps its data elsewhere, choose the folder under **Custom Locations**.
+
+**Google Antigravity on Windows.** Turn on Antigravity in Pacer to follow tasks in the App and IDE. With **Progress Ring** on, Pacer registers the local progress tool automatically. Restart Antigravity after setup to load the tool. The ring fills when the agent reports an estimate. Install and sign in to Antigravity CLI once to see automatically refreshed five-hour and weekly quota bars for Gemini and for Claude/GPT.
 
 **SSH hosts.** Pacer follows the hosts you already use in Codex and Claude, including hosts added directly in Codex Desktop. A machine you reach through more than one entry is followed once. A host needs SSH access without a password prompt and Python 3. If a host disconnects, use **Retry** on the **Remote** page.
 
@@ -157,6 +159,7 @@ Changes apply right away. When an update is available, it shows in the sidebar a
 - Pacer has no account and sends no analytics.
 - It reads the logs your agents already write and keeps only what the island shows: task titles, stages, timing and token counts. It never keeps your prompts or replies.
 - Sign-ins happen in Pacer's own window. Pacer never reads other apps' passwords or browser cookies.
+- GLM usage is the one exception: Pacer opens the coding-plan key ZCode keeps for your account, sends it only to Z.ai's usage service, and keeps a digest of the account, never the key.
 - **Hide Project Names** replaces task titles on screen and in notifications.
 
 ## Troubleshooting

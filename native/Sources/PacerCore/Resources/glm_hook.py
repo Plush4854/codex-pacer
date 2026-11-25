@@ -54,12 +54,14 @@ def hook(home,value):
         row={'origin':'hook','sessionId':thread,'at':at}
         if prompt:row['promptId']=prompt
         if agent:row['parentId']=session
-        cwd=value.get('cwd')
+        # ZCode's cwd follows the shell; the project directory is the folder the session runs in.
+        cwd=os.environ.get('ZCODE_PROJECT_DIR') or os.environ.get('CLAUDE_PROJECT_DIR') or value.get('cwd')
         if isinstance(cwd,str) and len(cwd)<=4096:row['project']=os.path.basename(cwd.rstrip('/').rstrip('\\'))[:240]
         rows=[]
         if event=='SessionStart':
             meta=dict(row,kind='metadata')
-            if isinstance(value.get('model'),str):meta['model']=value['model'][:256]
+            # A model is named by its account's provider and its own name; a task shows the name.
+            if isinstance(value.get('model'),str):meta['model']=value['model'].rsplit('/',1)[-1][:256]
             if not agent and value.get('source') in ('startup','resume'):meta['sessionLaunch']=True
             rows.append(meta)
         item=ident(value.get('tool_use_id')) or 'attention'

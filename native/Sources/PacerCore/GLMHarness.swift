@@ -12,7 +12,7 @@ enum GLMHarness {
         LocalHarnessDefinition(
             descriptor: .init(id: .glm, name: "GLM ZCode", symbol: "sparkles",
                               brand: .init(dark: .init(0x4CC9F0), light: .init(0x0E7490), accentLift: 0.55, accentLuminance: 0.16),
-                              website: URL(string: "https://z.ai/"), hasTaskProgress: true),
+                              website: URL(string: "https://z.ai/"), balance: .quotaWindows),
             platforms: [.windows, .macOS], home: ".zcode", dataFile: "cli/db/db.sqlite",
             windowsExecutables: ["Programs/ZCode/ZCode.exe"],
             macApplicationNames: ["ZCode"],
@@ -45,7 +45,7 @@ final class GLMHarnessMonitor: LocalHarnessMonitor, @unchecked Sendable {
     }
 
     func start(home: URL, policy: ActivityRefreshPolicy, publish: @escaping @Sendable (HarnessActivity) async -> Void) async {
-        reset()
+        _ = reset()
         self.home = home; self.policy = policy; self.publish = publish
         let current = generation
         watcher = ActivityLogWatcher(files: io.files, events: io.events, interval: policy.interval,
