@@ -37,7 +37,7 @@ Pacer 替你盯着每个任务的进度，你不再分心，效率自然更高�
 
 </div>
 
-> **此分支还支持** Mac 和 Windows 上的 GLM ZCode 任务与配额，以及 Windows 上的 Antigravity 任务、进度圆环和配额自动刷新。[Windows x64 预览版](https://github.com/Plush4854/codex-pacer/releases/tag/glm-antigravity-preview-1) · [设置指南](docs/guide.zh-CN.md)
+> **此分支还支持** Mac 和 Windows 上的 GLM ZCode 任务与配额，以及 Windows 上的 Antigravity 任务、进度圆环和配额自动刷新。[Windows x64 预览版](https://github.com/Plush4854/codex-pacer/releases/tag/glm-antigravity-preview-2) · [设置指南](docs/guide.zh-CN.md)
 
 > [!TIP]
 > **4.7 新功能：Claude 调用 Codex（Beta）。** 让 Claude Code 请 Codex 审一下改动或接手一个任务，Codex 的进度就显示在 Claude 任务下面。[看看怎么用](#collab)
