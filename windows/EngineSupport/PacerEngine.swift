@@ -8,6 +8,8 @@ public enum PacerEngine {
     public static func run() async {
         if TaskProgressReporter.serveLocalHarnessIfRequested(arguments: CommandLine.arguments, read: EngineInput.read) { return }
         #if os(Windows)
+        if WindowsAntigravity.runIfRequested(args: CommandLine.arguments, read: EngineInput.read) { return }
+        if WindowsAntigravityQuota.runIfRequested(args: CommandLine.arguments, read: EngineInput.read) { return }
         // First, so a failure anywhere below leaves a report.
         WindowsCrashReport.install()
         if WindowsCrashReport.diagnose() { return }
@@ -55,11 +57,16 @@ public enum PacerEngine {
                 .appendingPathComponent("actions.json"), files: WindowsFileSystem())
         }
         var hookServices: EngineClaudeHookServices?
+        var glmServices: EngineGLMHookServices?
         if !demo && !readOnly, CommandLine.arguments.contains("--manage-claude-hooks"),
            let index = CommandLine.arguments.firstIndex(of: "--claude-runtime-root"), CommandLine.arguments.indices.contains(index + 1) {
             let path = CommandLine.arguments[index + 1]
             if path.utf16.count < 16000, WindowsCodexExecutableDiscovery.absolute(path), !path.unicodeScalars.contains(where: { CharacterSet.controlCharacters.contains($0) }) {
-                hookServices = .live(root: URL(fileURLWithPath: path, isDirectory: true))
+                let root = URL(fileURLWithPath: path, isDirectory: true)
+                hookServices = .live(root: root)
+                // The host's gate covers Pacer's hook runtimes; GLM keeps its
+                // own sibling root so Claude's cleanup never sees ZCode homes.
+                glmServices = .live(root: root.deletingLastPathComponent().appendingPathComponent("GLMRuntime", isDirectory: true))
             }
         }
         var progressRoot = WindowsCodexProgressPaths.defaultRoot
@@ -79,6 +86,8 @@ public enum PacerEngine {
             sshServices: ssh, claudeRemoteServices: .live(ssh: ssh, wsl: wsl),
             codexRemoteProgressServices: demo || readOnly ? nil : .codexProgress(ssh: ssh, wsl: wsl),
             allowsLiveClaudeWeb: !demo && !readOnly, claudeWebReference: claudeReference, claudeHookServices: hookServices,
+            glmHookServices: glmServices,
+            glmQuotaServices: demo || readOnly ? nil : .live,
             codexHookServices: demo || readOnly ? nil : .live(runtimeRoot: progressRoot),
             managesCodexProgress: !demo && !readOnly, managesDeepSeekProgress: !demo && !readOnly, managesLocalHarnessProgress: !demo && !readOnly,
             codexProgressPaths: .init(root: progressRoot), allowsStorageRecovery: !readOnly)
@@ -147,6 +156,14 @@ actor EngineRuntime {
     }
     private var claudeHookHome: URL?, claudeHookRequest: UUID?
     private var claudeHooksEnabled = false
+    private let glmHookServices: EngineGLMHookServices?
+    private var glmHookSetup: EngineGLMHookSetup?
+    private var glmHookTask: Task<Void, Never>? {
+        get { ownedWork.task(.init(.setup, provider: .glm, identifier: "hooks")) }
+        set { setOwnedTask(newValue, key: .init(.setup, provider: .glm, identifier: "hooks")) }
+    }
+    private var glmHookHome: URL?, glmHookRequest: UUID?
+    private var glmHooksEnabled = false
     private let codexHookServices: EngineCodexHookServices?
     /// Not keyed to the Codex source: replacing the source (as initialization
     /// does) must not cancel the setup it started. A new home sets up again.
@@ -264,6 +281,10 @@ actor EngineRuntime {
     private var localProgressQueues: [AgentProvider: ProgressSetupQueue<LocalHarnessProgressSetup.Target>] = [:]
     private var localProgressTasks: [AgentProvider: Task<Void, Never>] = [:]
     private var localProgressStatuses: [AgentProvider: LocalHarnessProgressSetup.State] = [:]
+    private struct AntigravityHookTarget: Equatable, Sendable { let home: URL; let enabled: Bool }
+    private var antigravityHookQueue = ProgressSetupQueue<AntigravityHookTarget>()
+    private let antigravityQuotaWork = ApplicationWorkRegistry.Key(.quota, provider: .antigravity)
+    private var lastAntigravityQuotaAttempt: Date?
     /// The module's app as the host last saw it, for the reopen step.
     private var localHarnessApps: [AgentProvider: HarnessProgressGuide.AppPresence] = [:]
     private var localHarnessViews: [AgentProvider: HarnessProgressGuide.AppView] = [:]
@@ -444,6 +465,14 @@ actor EngineRuntime {
             ClaudeQuotaMonitor(services: services, now: now) { [weak self] state in await self?.receiveClaudeQuota(state) }
         }
     }()
+    private let glmQuotaServices: GLMQuotaServices?
+    private var glmQuotaState: GLMQuotaState?
+    private lazy var glmQuotaMonitor: GLMQuotaMonitor? = {
+        guard let services = glmQuotaServices else { return nil }
+        return GLMQuotaCoordinator(services: services, now: now) { [weak self] (state: GLMQuotaState) in
+            await self?.receiveGLMQuota(state)
+        }
+    }()
     private lazy var claudeCloudMonitor: ClaudeCloudMonitor? = {
         let services = cloudServices ?? (claudeWebReference ? .reference(bridge: claudeWebBridge, now: now) : allowsLiveClaudeWeb ? .live(bridge: claudeWebBridge) : nil)
         let local = cloudLocalSessions
@@ -511,6 +540,8 @@ actor EngineRuntime {
          allowsLiveClaudeWeb: Bool = false,
          claudeWebReference: Bool = false,
          claudeHookServices: EngineClaudeHookServices? = nil,
+         glmHookServices: EngineGLMHookServices? = nil,
+         glmQuotaServices: GLMQuotaServices? = nil,
          codexHookServices: EngineCodexHookServices? = nil,
          managesCodexProgress: Bool = false,
          managesDeepSeekProgress: Bool = false,
@@ -539,6 +570,8 @@ actor EngineRuntime {
         self.activityHostServices = activityHostServices
         self.claudeWebReference = claudeWebReference && demo
         self.claudeHookServices = claudeHookServices
+        self.glmHookServices = glmHookServices
+        self.glmQuotaServices = glmQuotaServices
         self.codexHookServices = codexHookServices
         self.managesCodexProgress = managesCodexProgress; self.codexProgressPaths = codexProgressPaths
         self.managesDeepSeekProgress = managesDeepSeekProgress
@@ -825,6 +858,7 @@ actor EngineRuntime {
                   let definition = localHarnesses.definitions.first(where: { $0.descriptor.id.rawValue == name }),
                   definition.progressConfigFile != nil else { failure(id: command.id, code: "unavailable"); return true }
             scheduleLocalHarnessProgress(definition, force: true)
+            if definition.descriptor.id == .antigravity { scheduleAntigravityHooks(force: true) }
             if projectionReady { publish(notices: []) }
         case "refreshHarnessProgressConnection":
             guard active, let name = command.params?.provider,
@@ -943,6 +977,7 @@ actor EngineRuntime {
             // can answer a quota request for an organization selected here.
             await quotaMonitor?.refreshIfDue(expanded: expanded)
             _ = await claudeQuotaMonitor?.refreshIfDue(expanded: expanded)
+            _ = await glmQuotaMonitor?.refreshIfDue(expanded: expanded)
         case "prepareForSleep":
             await prepareForSleep()
         case "resumeAfterSleep":
@@ -950,6 +985,7 @@ actor EngineRuntime {
         case "refresh":
             await quotaMonitor?.refreshIfDue(expanded: expanded, force: true)
             _ = await claudeQuotaMonitor?.refreshIfDue(expanded: expanded, force: true)
+            _ = await glmQuotaMonitor?.refreshIfDue(expanded: expanded, force: true)
             await claudeCloudMonitor?.refresh()
             forceBalanceRequested = true
             await refresh(discover: command.params?.discover ?? false)
@@ -993,6 +1029,7 @@ actor EngineRuntime {
             if demo { publish(notices: [], force: true) }
             else if provider == .codex, let quotaMonitor { await quotaMonitor.refreshIfDue(expanded: expanded, force: true) }
             else if provider == .claude, let claudeQuotaMonitor { _ = await claudeQuotaMonitor.refreshIfDue(expanded: expanded, force: true) }
+            else if provider == .glm, let glmQuotaMonitor { _ = await glmQuotaMonitor.refreshIfDue(expanded: expanded, force: true) }
             else { failure(id: command.id, code: "unavailable"); return true }
         case "snoozeDeepSeekSpike":
             guard initialized else { failure(id: command.id, code: "unavailable"); return true }
@@ -1277,6 +1314,8 @@ actor EngineRuntime {
         scheduleCodexProgressSetup(force: durableChanged)
         scheduleCodexHooks()
         scheduleDeepSeekProgressSetup()
+        scheduleGLMHooks()
+        scheduleAntigravityHooks()
         for definition in localHarnesses.definitions { scheduleLocalHarnessProgress(definition) }
         boundWSLCompletionProfiles = wslCompletionProfiles
         bindCodexCompletionSources()
@@ -1326,6 +1365,7 @@ actor EngineRuntime {
             .realtime: { [weak self] in await self?.bindDesktopMonitor() },
             .balance: { [weak self] in await self?.bindBalanceMonitor() }
         ])
+        await bindGLMQuota()
         if wslNeedsReconcile {
             wslNeedsReconcile = false
             await bindActivityMonitor(.claude)
@@ -1407,6 +1447,8 @@ actor EngineRuntime {
     }
 
     private func bindLocalHarness(_ provider: AgentProvider) async {
+        if provider == .glm { scheduleGLMHooks() }
+        if provider == .antigravity { scheduleAntigravityHooks() }
         guard enabled.contains(provider), let definition = localHarnesses.definition(for: provider) else { return }
         let context = lifecycle.version(provider)
         let monitor = localHarnesses.monitor(for: definition)
@@ -1525,6 +1567,64 @@ actor EngineRuntime {
         ModuleLibrary(modules: moduleSettings, detection: installation ?? .init(installed: []), supported: supportedProviders)
     }
 
+    private func scheduleAntigravityHooks(force: Bool = false) {
+        guard !demo, managesLocalHarnessProgress, clientSupportsHarnessModules,
+              let definition = localHarnesses.definition(for: .antigravity) else { return }
+        let target = AntigravityHookTarget(home: localHarnessHome(definition), enabled: enabled.contains(.antigravity))
+        if !target.enabled || antigravityHookQueue.target?.home != target.home {
+            ownedWork.cancel(antigravityQuotaWork)
+            lastAntigravityQuotaAttempt = nil
+        }
+        guard let ticket = antigravityHookQueue.request(target, force: force) else { return }
+        let executable = URL(fileURLWithPath: CommandLine.arguments[0]).standardizedFileURL.path
+        let task = Task { [weak self] in
+            await ticket.waitForPrevious()
+            await Task.detached(priority: .utility) {
+                do {
+                    if let previous = ticket.previous, previous.enabled, previous.home != target.home {
+                        try WindowsAntigravity.configure(home: previous.home, executable: executable, enabled: false)
+                        try WindowsAntigravityQuota.configure(home: previous.home, executable: executable, enabled: false)
+                    }
+                    try WindowsAntigravity.configure(home: target.home, executable: executable, enabled: target.enabled)
+                    try WindowsAntigravityQuota.configure(home: target.home, executable: executable, enabled: target.enabled)
+                } catch {
+                    // An invalid or independently edited file stays in place.
+                }
+            }.value
+            await self?.finishAntigravityHooks(ticket)
+        }
+        antigravityHookQueue.track(task)
+    }
+
+    private func finishAntigravityHooks(_ ticket: ProgressSetupQueue<AntigravityHookTarget>.Ticket) async {
+        guard antigravityHookQueue.finish(ticket), active, ticket.target.enabled else { return }
+        scheduleAntigravityQuotaRefresh()
+        await localActivityMonitor(.antigravity)?.refresh()
+    }
+
+    private func scheduleAntigravityQuotaRefresh() {
+        guard active, !demo, managesLocalHarnessProgress, clientSupportsHarnessModules, enabled.contains(.antigravity),
+              ownedWork.task(antigravityQuotaWork) == nil,
+              let definition = localHarnesses.definition(for: .antigravity) else { return }
+        let home = localHarnessHome(definition)
+        let standard = definition.resolveHome(override: nil, isAbsolute: WindowsCodexExecutableDiscovery.absolute)
+        guard home.path.caseInsensitiveCompare(standard.path) == .orderedSame else { return }
+        let date = now()
+        if let lastAntigravityQuotaAttempt, (0..<60).contains(date.timeIntervalSince(lastAntigravityQuotaAttempt)) { return }
+        lastAntigravityQuotaAttempt = date
+        let owner = ownedWork.begin(antigravityQuotaWork, version: lifecycle.version(.antigravity))
+        let task = Task { [weak self] in
+            await WindowsAntigravityQuota.refreshIfDue(home: home, now: date)
+            await self?.finishAntigravityQuotaRefresh(owner)
+        }
+        ownedWork.attach(task, to: owner)
+    }
+
+    private func finishAntigravityQuotaRefresh(_ owner: ApplicationWorkRegistry.Ticket) {
+        guard ownedWork.finish(owner), active, owner.version == lifecycle.version(.antigravity) else { return }
+        if projectionReady { publish(notices: []) }
+    }
+
     private func scheduleLocalHarnessProgress(_ definition: LocalHarnessDefinition, force: Bool = false, inspectOnly: Bool = false) {
         guard !demo, managesLocalHarnessProgress, clientSupportsHarnessModules, let configFile = definition.progressConfigFile else { return }
         let provider = definition.descriptor.id
@@ -1605,6 +1705,43 @@ actor EngineRuntime {
         applyClaudeProgressSwitch(setupConfirmed: report.state == .ready)
         applyCodexDelegationSwitch(setupConfirmed: report.state == .ready)
         codexDelegationStatusCache = nil
+        publish(notices: [])
+    }
+    private var glmHome: URL {
+        localHarnesses.definition(for: .glm).map(localHarnessHome)
+            ?? URL(fileURLWithPath: ".zcode", isDirectory: true, relativeTo: FileManager.default.homeDirectoryForCurrentUser).standardizedFileURL
+    }
+    /// GLM usage follows its module, as Codex's and Claude's do: read while it
+    /// is on, from the data folder ZCode keeps the plan's key in.
+    private func bindGLMQuota() async {
+        guard active, let monitor = glmQuotaMonitor else { return }
+        await monitor.configure(home: glmHome, enabled: !demo && enabled.contains(.glm), context: lifecycle.version(.glm))
+    }
+    private func receiveGLMQuota(_ state: GLMQuotaState) {
+        guard active, state.context == lifecycle.version(.glm) else { return }
+        glmQuotaState = state
+        if projectionReady { publish(notices: []) }
+    }
+    /// Installs Pacer's GLM hooks while the GLM module is on and removes them
+    /// when it is off, as the Claude hooks are; a moved data folder sets up
+    /// again.
+    private func scheduleGLMHooks(force: Bool = false) {
+        guard let services = glmHookServices else { return }
+        let active = enabled.contains(.glm), home = glmHome
+        guard force || glmHookHome != home || glmHooksEnabled != active else { return }
+        glmHookTask?.cancel()
+        glmHookHome = home; glmHooksEnabled = active
+        let request = UUID(); glmHookRequest = request
+        glmHookSetup = .init(active ? .settingUp : .disabled)
+        glmHookTask = Task { [weak self] in
+            let result = await services.perform(active ? .ensure : .remove, home)
+            guard !Task.isCancelled else { return }
+            await self?.receiveGLMHookSetup(result, request: request, home: home)
+        }
+    }
+    private func receiveGLMHookSetup(_ report: EngineGLMHookSetup, request: UUID, home: URL) {
+        guard initialized, glmHookRequest == request, glmHookHome == home else { return }
+        glmHookTask = nil; glmHookSetup = report
         publish(notices: [])
     }
     /// Installs Pacer's Codex hooks while the Codex module is on and removes
@@ -2126,6 +2263,7 @@ actor EngineRuntime {
                 }
                 enabled = next; projectionReady = false
                 applyCodexDelegationSwitch()
+                scheduleAntigravityHooks()
                 for definition in localHarnesses.definitions { scheduleLocalHarnessProgress(definition) }
                 let plan = lifecycle.settings(lifecycleConfiguration)
                 for provider in plan.changedProviders { resetSourceState(provider) }
@@ -2134,6 +2272,7 @@ actor EngineRuntime {
             }
         }
         await performLifecycle(lifecycle.tick(lifecycleTick))
+        scheduleAntigravityQuotaRefresh()
         if projectionReady { publish(notices: []) }
     }
 
@@ -2143,7 +2282,9 @@ actor EngineRuntime {
     }
 
     private func startMaintenance() {
-        guard active, maintenance == nil else { return }
+        guard active else { return }
+        scheduleAntigravityQuotaRefresh()
+        guard maintenance == nil else { return }
         maintenance = Task { [weak self] in
             while !Task.isCancelled {
                 do { try await Task.sleep(nanoseconds: 60_000_000_000) } catch { return }
@@ -2162,6 +2303,7 @@ actor EngineRuntime {
                 switch provider {
                 case .codex: await quotaMonitor?.refreshIfDue(expanded: expanded, force: force)
                 case .claude: _ = await claudeQuotaMonitor?.refreshIfDue(expanded: expanded, force: force)
+                case .glm: _ = await glmQuotaMonitor?.refreshIfDue(expanded: expanded, force: force)
                 // Mac's start/wake is an explicit request, without bypassing a
                 // signed-out/challenge or failed-disconnect connection state.
                 case .deepseek: _ = await balanceMonitor?.refreshIfDue(active: active, requested: force)
@@ -3183,6 +3325,13 @@ actor EngineRuntime {
                     transport: claudeWebFetches ? "webview" : "https", reason: claudeVerification.error(state) ?? state.warning))
             }
         }
+        if !demo, enabled.contains(.glm) {
+            snapshots[.glm] = glmQuotaState?.snapshot
+            if let state = glmQuotaState {
+                displayedSources.append(.init(id: "glm:quota", provider: "glm", available: state.error == nil && state.snapshot?.windows.isEmpty == false,
+                    transport: "https", reason: state.error))
+            }
+        }
         if enabled.contains(.deepseek), let state = balanceState {
             displayedSources.append(.init(id: "deepseek:balance", provider: "deepseek",
                 available: state.balance != nil && state.error == nil,
@@ -3209,6 +3358,11 @@ actor EngineRuntime {
                 if let error = claudeVerification.error(state) { failedProviders.insert(.claude); quotaErrors[.claude] = error }
                 if state.refreshing { refreshingProviders.insert(.claude) }
                 if snapshots[.claude] != nil { sourceTexts[.claude] = state.source?.label }
+        }
+        if !demo, enabled.contains(.glm), let state = glmQuotaState {
+            if let error = state.error { failedProviders.insert(.glm); quotaErrors[.glm] = error }
+            if state.refreshing { refreshingProviders.insert(.glm) }
+            if snapshots[.glm] != nil { sourceTexts[.glm] = L10n.text("quota.source_glm") }
         }
         if snapshots[.codex] != nil { sourceTexts[.codex] = L10n.text("quota.source_codex") }
         let codexSSH = enabled.contains(.codex) ? desktopState.flatMap { $0.context == lifecycle.version(.codex) ? $0 : nil } : nil
@@ -3306,6 +3460,9 @@ actor EngineRuntime {
             },
             claudeRemoteSetups: claudeRemoteSetups, connections: connectionPresentation(), codexProgressSetup: codexProgressSetup,
             deepseekProgressSetup: deepseekProgressSetup)
+        if !demo, enabled.contains(.antigravity), let definition = localHarnesses.definition(for: .antigravity) {
+            snapshot.antigravityQuota = WindowsAntigravityQuota.presentation(home: localHarnessHome(definition), now: date)
+        }
         snapshot.expandedPanel = EngineExpandedPanel(settings: panelSettings, enabled: enabled, snapshots: snapshots,
             hasBudget: hasBudget, at: date)
         snapshot.wslAvailability = demo ? .available : wslAvailability
@@ -3337,8 +3494,10 @@ actor EngineRuntime {
         let plan = lifecycle.prepareForSleep()
         guard plan.actions.contains(.suspendSources) else { return }
         releaseHostWork()
-        let quota = quotaMonitor, claude = claudeQuotaMonitor, balance = balanceMonitor
+        let quota = quotaMonitor, claude = claudeQuotaMonitor, balance = balanceMonitor, glm = glmQuotaMonitor
         quota?.invalidateSource(); claude?.invalidateSource(); balance?.invalidateSource()
+        glmQuotaMonitor = nil
+        await glm?.stop()
         // Stop owns the old clients. Waking creates replacements seeded with
         // the last accepted readings; late callbacks cannot reach the new epoch.
         quotaMonitor = nil; claudeQuotaMonitor = nil; balanceMonitor = nil
@@ -3351,12 +3510,15 @@ actor EngineRuntime {
         // A reattached source may report the same rows as before sleep.
         // Send the first rebuilt projection so the host can leave its sleep UI.
         snapshotEmission = .init()
-        if !demo { scheduleClaudeHooks(); scheduleCodexHooks(force: true) }
+        if !demo { scheduleClaudeHooks(); scheduleCodexHooks(force: true); scheduleGLMHooks() }
         quotaMonitor = quotaServices.map { services in
             CodexQuotaMonitor(services: services, seed: codexQuotaState, now: now) { [weak self] state in await self?.receiveQuota(state) }
         }
         claudeQuotaMonitor = effectiveClaudeServices.map { services in
             ClaudeQuotaMonitor(services: services, seed: claudeQuotaState, webAvailable: cloudWebAvailable, now: now) { [weak self] state in await self?.receiveClaudeQuota(state) }
+        }
+        glmQuotaMonitor = glmQuotaServices.map { services in
+            GLMQuotaMonitor(services: services, seed: glmQuotaState, now: now) { [weak self] state in await self?.receiveGLMQuota(state) }
         }
         balanceMonitor = balanceServices.map { services in
             DeepSeekBalanceMonitor(services: services, seed: balanceState, now: now) { [weak self] state in await self?.receiveBalance(state) }
@@ -3383,12 +3545,16 @@ actor EngineRuntime {
         await ShutdownDeadline().perform(progressTasks.map { task in { await task.value } })
         initialized = false; projectionReady = false
         releaseHostWork()
+        await glmQuotaMonitor?.stop()
         await cleanupSources(quota: quotaMonitor, claude: claudeQuotaMonitor, balance: balanceMonitor, sleeping: false)
     }
     private func releaseHostWork() {
+        ownedWork.cancel(antigravityQuotaWork)
+        lastAntigravityQuotaAttempt = nil
         stopWSLMonitoring()
         wslQuota = [:]
         claudeHookTask?.cancel(); claudeHookTask = nil; claudeHookRequest = nil; claudeHookHome = nil
+        glmHookTask?.cancel(); glmHookTask = nil; glmHookRequest = nil; glmHookHome = nil; glmHooksEnabled = false
         webHostPublication.reset(); publishedBalanceContext = nil
         cancelHostTracking(); invalidateNavigation()
         activityDisplayDeadline = nil

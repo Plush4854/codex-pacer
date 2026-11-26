@@ -22,6 +22,50 @@ int pacer_sha256(const uint8_t *bytes, size_t count, uint8_t output[32]) {
     BCryptCloseAlgorithmProvider(algorithm, 0);
     return status >= 0;
 }
+static int pacer_aes_key(BCRYPT_ALG_HANDLE *algorithm, BCRYPT_KEY_HANDLE *key, const uint8_t *bytes) {
+    if (BCryptOpenAlgorithmProvider(algorithm, BCRYPT_AES_ALGORITHM, NULL, 0) < 0) return 0;
+    if (BCryptSetProperty(*algorithm, BCRYPT_CHAINING_MODE, (PUCHAR)BCRYPT_CHAIN_MODE_GCM, sizeof(BCRYPT_CHAIN_MODE_GCM), 0) >= 0 &&
+        BCryptGenerateSymmetricKey(*algorithm, key, NULL, 0, (PUCHAR)bytes, 32, 0) >= 0) return 1;
+    BCryptCloseAlgorithmProvider(*algorithm, 0);
+    return 0;
+}
+static void pacer_aes_release(BCRYPT_ALG_HANDLE algorithm, BCRYPT_KEY_HANDLE key) {
+    if (key) BCryptDestroyKey(key);
+    BCryptCloseAlgorithmProvider(algorithm, 0);
+}
+static int pacer_aes_gcm(BCRYPT_KEY_HANDLE key, int opening, const uint8_t *nonce, const uint8_t *tag,
+                         const uint8_t *input, size_t count, uint8_t *output) {
+    BCRYPT_AUTHENTICATED_CIPHER_MODE_INFO info;
+    BCRYPT_INIT_AUTH_MODE_INFO(info);
+    info.pbNonce = (PUCHAR)nonce; info.cbNonce = 12;
+    info.pbTag = (PUCHAR)tag; info.cbTag = 16;
+    ULONG written = 0;
+    NTSTATUS status = opening
+        ? BCryptDecrypt(key, (PUCHAR)input, (ULONG)count, &info, NULL, 0, output, (ULONG)count, &written, 0)
+        : BCryptEncrypt(key, (PUCHAR)input, (ULONG)count, &info, NULL, 0, output, (ULONG)count, &written, 0);
+    if (status < 0) return status == (NTSTATUS)0xC000A002 /* STATUS_AUTH_TAG_MISMATCH */ ? -2 : -1;
+    return written == count ? (int)written : -1;
+}
+int pacer_aes256_gcm_open(const uint8_t *key, const uint8_t *nonce, const uint8_t *tag,
+                          const uint8_t *sealed, size_t count, uint8_t *plain) {
+    if (count == 0 || count > UINT32_MAX) return -1;
+    BCRYPT_ALG_HANDLE algorithm = NULL;
+    BCRYPT_KEY_HANDLE aes = NULL;
+    if (!pacer_aes_key(&algorithm, &aes, key)) return -1;
+    int result = pacer_aes_gcm(aes, 1, nonce, tag, sealed, count, plain);
+    pacer_aes_release(algorithm, aes);
+    return result;
+}
+int pacer_aes256_gcm_seal(const uint8_t *key, const uint8_t *nonce, const uint8_t *plain,
+                          size_t count, uint8_t *sealed, uint8_t tag[16]) {
+    if (count == 0 || count > UINT32_MAX) return -1;
+    BCRYPT_ALG_HANDLE algorithm = NULL;
+    BCRYPT_KEY_HANDLE aes = NULL;
+    if (!pacer_aes_key(&algorithm, &aes, key)) return -1;
+    int result = pacer_aes_gcm(aes, 0, nonce, tag, plain, count, sealed);
+    pacer_aes_release(algorithm, aes);
+    return result;
+}
 int pacer_replace_file(const uint16_t *source, const uint16_t *destination) {
     return MoveFileExW((LPCWSTR)source, (LPCWSTR)destination, MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH) != 0;
 }
@@ -167,6 +211,10 @@ int pacer_codex_package_path(size_t index, uint16_t *path, size_t capacity) {
 #else
 // This target is only a dependency on Windows.
 int pacer_sha256(const uint8_t *bytes, size_t count, uint8_t output[32]) { return 0; }
+int pacer_aes256_gcm_open(const uint8_t *key, const uint8_t *nonce, const uint8_t *tag,
+                          const uint8_t *sealed, size_t count, uint8_t *plain) { return -1; }
+int pacer_aes256_gcm_seal(const uint8_t *key, const uint8_t *nonce, const uint8_t *plain,
+                          size_t count, uint8_t *sealed, uint8_t tag[16]) { return -1; }
 int pacer_replace_file(const uint16_t *source, const uint16_t *destination) { return 0; }
 int pacer_read_credential(const uint16_t *name, uint8_t *bytes, size_t capacity) { return -1; }
 int pacer_write_credential(const uint16_t *name, const uint8_t *bytes, size_t count) { return 0; }

@@ -37,6 +37,8 @@ Pacer keeps an eye on every task for you, so you stay focused and get more done.
 
 </div>
 
+> **Also in this fork:** GLM ZCode task tracking and quota on Mac and Windows, plus Antigravity task tracking, progress rings, and automatic quota refresh on Windows. [Windows x64 preview](https://github.com/Plush4854/codex-pacer/releases/tag/glm-antigravity-preview-1) · [Setup guide](docs/guide.md)
+
 > [!TIP]
 > **New in 4.7: Claude calls Codex (Beta).** Ask Claude Code to have Codex review a change or take on a task, and follow Codex's progress right under Claude's task. [See how it works](#collab).
 

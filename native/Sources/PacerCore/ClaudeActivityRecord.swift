@@ -274,6 +274,10 @@ private final class ClaudeActivityDateParser: @unchecked Sendable {
 struct ClaudeActivityState: Sendable {
     let sourceID: String?
     let sourceName: String?
+    /// The provider whose sessions this state tracks; Claude-compatible
+    /// spools (such as GLM's) reuse the machine under their own identity.
+    let provider: AgentProvider
+    let fallbackProject: String
     private var sessions: [String: SessionActivity] = [:]
     private var hooks: Set<String> = []
     private var historicalRunning: Set<String> = []
@@ -346,12 +350,15 @@ struct ClaudeActivityState: Sendable {
     private var excludedSessions: Set<String> = []
     private(set) var unmatchedRequests = 0
     private(set) var status = RuntimeStreamStatus()
-    init(sourceID: String? = nil, sourceName: String? = nil) { self.sourceID = sourceID; self.sourceName = sourceName }
+    init(sourceID: String? = nil, sourceName: String? = nil, provider: AgentProvider = .claude, fallbackProject: String? = nil) {
+        self.sourceID = sourceID; self.sourceName = sourceName; self.provider = provider
+        self.fallbackProject = fallbackProject ?? (provider == .claude ? "Claude Code" : provider.displayName)
+    }
     var activities: [SessionActivity] { sessions.values.sorted { $0.id < $1.id } }
     var attention: [PendingAttentionRequest] { requests.values.sorted { $0.detectedAt < $1.detectedAt } }
     var performanceUpdates: [SessionPerformanceUpdate] { Array(metrics.values) }
     var knownStartedSessionIDs: Set<String> { excludedSessions.union(sessions.values.filter { $0.turnID != nil }.compactMap(\.threadID)) }
-    var excludedActivityIDs: Set<String> { Set(excludedSessions.map { AgentProvider.claude.activityID(sessionID: $0, sourceHostID: nil) }) }
+    var excludedActivityIDs: Set<String> { Set(excludedSessions.map { provider.activityID(sessionID: $0, sourceHostID: nil) }) }
     /// Applies only to default-home Desktop mirrors, not independent SSH data.
     mutating func setExcludedSessionIDs(_ ids: Set<String>) {
         guard sourceID == nil else { return }
@@ -477,13 +484,13 @@ struct ClaudeActivityState: Sendable {
         }
         let date = Date(timeIntervalSince1970: seconds), origin = record["origin"] as? String ?? "telemetry"
         let thread = kind == "request" ? ClaudeActivityRecord.identifier(record["agentId"] as? String) ?? session : session
-        let key = AgentProvider.claude.activityID(sessionID: thread, sourceHostID: sourceID)
+        let key = provider.activityID(sessionID: thread, sourceHostID: sourceID)
         // Internal Claude agents also emit tool/stop hooks. A hook ID alone
         // cannot admit a child, including an unknown metadata-only orphan.
         if origin == "hook", ClaudeActivityRecord.identifier(record["parentId"] as? String) != nil,
            sessions[key]?.turnID == nil, kind != "subagentStart" { return }
-        var value = sessions[key] ?? SessionActivity(id: thread, project: sourceName ?? "Claude Code", sourceHost: sourceName,
-            sourceHostID: sourceID, phaseAwareRate: true, provider: .claude, sessionID: thread)
+        var value = sessions[key] ?? SessionActivity(id: thread, project: sourceName ?? fallbackProject, sourceHost: sourceName,
+            sourceHostID: sourceID, phaseAwareRate: true, provider: provider, sessionID: thread)
         // A child's hooks, transcript and telemetry carry its parent's current
         // prompt, which moves on while a background child keeps working. Until
         // it ends, the child's records belong to the turn its SubagentStart opened,
@@ -551,7 +558,7 @@ struct ClaudeActivityState: Sendable {
                   let item = ClaudeActivityRecord.identifier(record["itemId"] as? String), let tool = agentTools[key + ":" + item], tool.turn == turn, seconds >= tool.at,
                   let child = ClaudeActivityRecord.identifier(record["agentId"] as? String), child != thread,
                   let status = record["agentStatus"] as? String, ["completed", "async_launched"].contains(status) else { return }
-            let childKey = AgentProvider.claude.activityID(sessionID: child, sourceHostID: sourceID)
+            let childKey = provider.activityID(sessionID: child, sourceHostID: sourceID)
             var ownership = AgentCompletion(parent: thread, item: item, turn: turn, toolStartedAt: tool.at, launchedAt: seconds,
                 at: seconds, historical: attaching, status: status, background: status == "async_launched")
             if let observed = sessions[childKey], [.running, .waitingForInput].contains(observed.phase),
@@ -580,7 +587,7 @@ struct ClaudeActivityState: Sendable {
             guard let child = ClaudeActivityRecord.identifier(record["agentId"] as? String),
                   let item = ClaudeActivityRecord.identifier(record["itemId"] as? String),
                   let status = record["agentStatus"] as? String, ["completed", "failed", "killed"].contains(status) else { return }
-            let childKey = AgentProvider.claude.activityID(sessionID: child, sourceHostID: sourceID)
+            let childKey = provider.activityID(sessionID: child, sourceHostID: sourceID)
             let notice = EarlyNotification(thread: thread, at: seconds, historical: attaching, status: status)
             guard let launch = agentLaunches[childKey], launch.item == item else {
                 // The ending can be read before its launch: Claude Code may keep
@@ -762,7 +769,7 @@ struct ClaudeActivityState: Sendable {
             }
         case "toolEnd":
             value.applyRuntime(event("item/completed", ["itemId": item, "itemType": "commandExecution"]))
-            let requestKey = AgentProvider.claude.activityID(sessionID: thread, sourceHostID: sourceID) + ":" + item
+            let requestKey = provider.activityID(sessionID: thread, sourceHostID: sourceID) + ":" + item
             requests.removeValue(forKey: requestKey)
             if let pending = requests.values.first(where: { $0.threadID == thread }) {
                 value.applyRuntime(event("thread/status/changed", ["status": "active", "flags": [pending.kind == .approval ? "waitingOnApproval" : "waitingOnUserInput"]]))
@@ -783,7 +790,7 @@ struct ClaudeActivityState: Sendable {
             attention(kind == "approval" ? .approval : .input, thread: thread, item: item, at: date)
             value.applyRuntime(event("thread/status/changed", ["status": "active", "flags": [kind == "approval" ? "waitingOnApproval" : "waitingOnUserInput"]]))
         case "attentionCleared":
-            let requestKey = AgentProvider.claude.activityID(sessionID: thread, sourceHostID: sourceID) + ":" + item
+            let requestKey = provider.activityID(sessionID: thread, sourceHostID: sourceID) + ":" + item
             requests.removeValue(forKey: requestKey)
             if let pending = requests.values.first(where: { $0.threadID == thread }) {
                 value.applyRuntime(event("thread/status/changed", ["status": "active", "flags": [pending.kind == .approval ? "waitingOnApproval" : "waitingOnUserInput"]]))
@@ -902,7 +909,7 @@ struct ClaudeActivityState: Sendable {
     private func rootThread(_ thread: String) -> String {
         var current = thread, seen: Set<String> = []
         while seen.insert(current).inserted, seen.count <= 16,
-              let parent = sessions[AgentProvider.claude.activityID(sessionID: current, sourceHostID: sourceID)]?.parentThreadID {
+              let parent = sessions[provider.activityID(sessionID: current, sourceHostID: sourceID)]?.parentThreadID {
             current = parent
         }
         return current
@@ -922,7 +929,7 @@ struct ClaudeActivityState: Sendable {
         // One call starts at most one run: the launch claims the child's first
         // run after the call began, never one that follows it, however its
         // copies' timestamps fall around the skew allowance.
-        let key = AgentProvider.claude.activityID(sessionID: child.threadID ?? "", sourceHostID: sourceID)
+        let key = provider.activityID(sessionID: child.threadID ?? "", sourceHostID: sourceID)
         guard start >= completion.toolStartedAt, previousRunStarts[key].map({ $0 < completion.toolStartedAt }) ?? true,
               start <= completion.launchedAt + (completion.background ? Self.launchStartSkew : 0) else { return nil }
         var bound = completion; bound.childTurn = turn; return bound
@@ -939,7 +946,7 @@ struct ClaudeActivityState: Sendable {
         if [.completed, .interrupted].contains(sessions[key]?.phase ?? .unknown), sessions[key]?.turnID == childTurn {
             if completion.status == "completed" { agentEnds[key] = completion }
             agentLaunches.removeValue(forKey: key)
-            let parentKey = AgentProvider.claude.activityID(sessionID: completion.parent, sourceHostID: sourceID)
+            let parentKey = provider.activityID(sessionID: completion.parent, sourceHostID: sourceID)
             agentTools.removeValue(forKey: parentKey + ":" + completion.item)
         }
     }
@@ -971,10 +978,10 @@ struct ClaudeActivityState: Sendable {
         if let update = SessionPerformanceUpdate(value) { metrics[key] = update }
     }
     private mutating func attention(_ kind: PendingAttentionRequest.Kind, thread: String, item: String, at date: Date) {
-        let id = AgentProvider.claude.activityID(sessionID: thread, sourceHostID: sourceID) + ":" + item
+        let id = provider.activityID(sessionID: thread, sourceHostID: sourceID) + ":" + item
         if requests[id]?.kind != kind {
             requests[id] = PendingAttentionRequest(id: id, threadID: thread, sourceHostID: sourceID, sourceName: sourceName,
-                kind: kind, detectedAt: date, provider: .claude)
+                kind: kind, detectedAt: date, provider: provider)
         }
         if requests.count > 128, let oldest = requests.min(by: { $0.value.detectedAt < $1.value.detectedAt })?.key { requests.removeValue(forKey: oldest) }
     }

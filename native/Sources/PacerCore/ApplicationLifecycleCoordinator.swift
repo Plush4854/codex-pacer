@@ -99,7 +99,7 @@ public struct ApplicationLifecycleCoordinator: Sendable {
     public func tick(_ input: Tick) -> Plan {
         var actions: [Action] = [.pruneActivities, .pruneHistory]
         guard acceptsObservedWork, !demo else { return Plan(actions) }
-        actions += [AgentProvider.codex, .claude].filter { configuration.enabled.contains($0) }.map { .quota($0, force: false) }
+        actions += [AgentProvider.codex, .claude, .glm].filter { configuration.enabled.contains($0) }.map { .quota($0, force: false) }
         // Local Codex has no periodic read: its hooks announce every rollout, and start, wake
         // and module changes read it once.
         if configuration.enabled.contains(.codex), input.now.timeIntervalSince(input.lastRemoteDiscovery) >= 30 { actions.append(.discoverActivityRoutes(.codex)) }

@@ -1,6 +1,7 @@
 import CWindowsSupport
 
-/// The shared sources use only CryptoKit's one-shot SHA-256 operation.
+/// The shared sources use CryptoKit's one-shot SHA-256 and AES-GCM operations
+/// (AES.swift); nothing else is provided here.
 /// Windows computes it with CNG instead of carrying a second crypto library.
 public enum SHA256 {
     public static func hash<D: Collection>(data: D) -> [UInt8] where D.Element == UInt8 {

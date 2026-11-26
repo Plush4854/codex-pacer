@@ -65,9 +65,9 @@ internal static class ProviderIcon
     internal static Border Tile(string provider, double size, string? fallback = null) =>
         new() { Width = size, Height = size, VerticalAlignment = VerticalAlignment.Center, Child = Create(provider, size, fallback) };
 
-    internal static FrameworkElement Caption(string provider)
+    internal static FrameworkElement Caption(string provider, string? symbol = null)
     {
-        var icon = Create(provider, 13);
+        var icon = Create(provider, 13, symbol);
         icon.Margin = new Thickness(0, 0, 4, 0);
         return icon;
     }

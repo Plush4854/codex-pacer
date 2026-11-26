@@ -896,9 +896,14 @@ public partial class IslandWindow : Window
             else if (current.WebAvailable && canConnectDeepSeekWeb?.Invoke() == true) DeepSeekWebSignInRequested?.Invoke(current.Context);
         };
     }
-    private FrameworkElement? QuotaStatus(DashboardProvider? provider) => provider?.Status is QuotaConnectionStatus status
-        ? new QuotaConnectionView(provider.Provider, status, ui, provider.Provider is "codex" or "claude" ? () => RetryProviderQuota(provider.Provider) : null,
-            provider.Provider is "codex" or "claude" ? () => { DismissForSettings(); ProviderSettingsRequested?.Invoke(provider.Provider); } : null) : null;
+    private FrameworkElement? QuotaStatus(DashboardProvider? provider)
+    {
+        bool windows = provider?.Provider is "codex" or "claude" ||
+            latest?.Modules?.FirstOrDefault(module => module.Provider == provider?.Provider)?.Balance == "quotaWindows";
+        return provider?.Status is QuotaConnectionStatus status
+            ? new QuotaConnectionView(provider.Provider, status, ui, windows ? () => RetryProviderQuota(provider.Provider) : null,
+                windows ? () => { DismissForSettings(); ProviderSettingsRequested?.Invoke(provider.Provider); } : null) : null;
+    }
     private async Task RetryProviderQuota(string provider)
     {
         try { await engine.SendAsync("retryQuota", new { provider }); }

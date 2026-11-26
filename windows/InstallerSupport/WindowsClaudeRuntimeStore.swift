@@ -41,6 +41,11 @@ public struct WindowsClaudeRuntimeStore {
     init(codexProgressRoot: URL) {
         root = codexProgressRoot.standardizedFileURL; directoryName = WindowsCodexProgressPaths.directoryName
     }
+    /// GLM's hook adapter keeps a runtime of its own, so Claude's cleanup
+    /// never reasons about ZCode homes.
+    init(glmRoot: URL) {
+        root = glmRoot.standardizedFileURL; directoryName = "GLMRuntime"
+    }
     public static var defaultRoot: URL {
         let environment = ProcessInfo.processInfo.environment
         let local = environment.first { $0.key.caseInsensitiveCompare("LOCALAPPDATA") == .orderedSame }?.value

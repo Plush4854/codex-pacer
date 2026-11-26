@@ -328,14 +328,14 @@ internal sealed class QuotaCell : StackPanel
 {
     /// <param name="below">Shown under the caption and status, centered in the column, e.g. Codex's reset capsule.</param>
     internal QuotaCell(string provider, EngineQuota? quota, EngineWallet? wallet, string? help = null, DashboardProvider? dashboard = null, FrameworkElement? status = null,
-        PanelGauge? gauge = null, bool paceTick = true, FrameworkElement? below = null)
+        PanelGauge? gauge = null, bool paceTick = true, FrameworkElement? below = null, string? name = null, string? symbol = null)
     {
         HorizontalAlignment = HorizontalAlignment.Stretch;
         var dial = new QuotaDial(provider, quota, wallet, dashboard: dashboard, gauge: gauge, paceTick: paceTick) { Width = 104, Height = 104, HorizontalAlignment = HorizontalAlignment.Center };
         Children.Add(dial);
         var caption = new StackPanel { Orientation = Orientation.Horizontal, Height = 15, Margin = new Thickness(0, 8, 0, 6), HorizontalAlignment = HorizontalAlignment.Center };
-        caption.Children.Add(ProviderIcon.Caption(provider));
-        caption.Children.Add(new TextBlock { Text = provider switch { "codex" => "Codex", "claude" => "Claude", _ => "DeepSeek" },
+        caption.Children.Add(ProviderIcon.Caption(provider, symbol));
+        caption.Children.Add(new TextBlock { Text = name ?? provider switch { "codex" => "Codex", "claude" => "Claude", _ => "DeepSeek" },
             FontSize = 11, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center });
         var shown = dial.GaugeWindow;
         string? verdict = dial.Split ? null : shown?.VerdictText;

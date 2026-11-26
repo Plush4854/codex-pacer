@@ -18,7 +18,7 @@ internal sealed record EngineSnapshot(
     string? DeepSeekProgressSetup = null, EngineExpandedPanel? ExpandedPanel = null,
     string? WslAvailability = null,
     IReadOnlyList<EngineAccountCredits>? AccountCredits = null, CodexHooks? CodexHooks = null,
-    CodexDelegationStatus? CodexDelegation = null);
+    CodexDelegationStatus? CodexDelegation = null, EngineAntigravityQuota? AntigravityQuota = null);
 /// Settings → Collaboration, the Claude → Codex pair: the switch, whether its
 /// skill is in Pacer's Claude plugin, the user-level skill it replaces, and
 /// Codex's self-check: sign-in, version, model catalog and what its own
@@ -29,6 +29,8 @@ internal sealed record CodexDelegationStatus(bool Enabled, bool SkillInstalled, 
     bool? SeenRun = null, bool? SeenEnded = null);
 /// A model from Codex's catalog, with the efforts it supports and its own default effort.
 internal sealed record CodexModelChoice(string Slug, string Name, IReadOnlyList<string>? Efforts = null, string? DefaultEffort = null);
+internal sealed record EngineAntigravityQuota(IReadOnlyList<EngineAntigravityWindow> Windows, bool Configured);
+internal sealed record EngineAntigravityWindow(string Id, double? Percent, double? Amount, double? ResetsAt, bool Stale);
 /// Codex task tracking through Pacer's hooks: `off`, `settingUp`, `notInstalled`,
 /// `needsApproval` (Pending of Pacer's hooks still to allow in Codex), `running`,
 /// `notRunning`, `needsCodexUpdate` or `installFailed`.

@@ -94,6 +94,8 @@ Both hosts load the provider app icons from the same `PacerCore/Resources/provid
 
 The expanded island's app buttons and their More menu entries use the transparent `provider-*-outline.png` files. ImageGen generated these from the public app icons. The strokes follow each control's foreground color.
 
+The GLM module uses [ZCode’s app icon](https://github.com/zai-org/ZCode/blob/main/packages/desktop/build/icon.png), with its Z mark as the toolbar mask. The Antigravity module uses the full-color and white icons from [Google’s press assets](https://antigravity.google/press).
+
 ### Model and reasoning effort
 
 Rows show the executing turn's model and reasoning effort. Codex reads them from rollout `turn_context` and Desktop's `latestModel`/`latestReasoningEffort`; app-server thread settings describe configuration for a later turn and never replace them. Claude reads `message.model` with `perTurnEffort` (falling back to `effort`); `<synthetic>` never names a model. A model reported without an effort keeps the known effort only while the model is unchanged; an explicit null clears it. Efforts must match `^[a-z][a-z0-9_-]*` within 32 bytes. `ModelDisplay` shortens known Claude and GPT identifiers (`claude-opus-5-5` becomes Opus 5.5) and keeps the raw identifier in the tooltip.

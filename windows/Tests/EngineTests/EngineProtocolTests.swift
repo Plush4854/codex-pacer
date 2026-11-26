@@ -93,7 +93,7 @@ final class EngineProtocolTests: XCTestCase {
                 output: { capture.append($0) })
             await runtime.hello()
             let hello = try XCTUnwrap(JSONSerialization.jsonObject(with: XCTUnwrap(capture.all().first)) as? [String: Any])
-            XCTAssertEqual(hello["harnessModules"] as? [String], ["workbuddy", "workbuddy-ai"])
+            XCTAssertEqual(hello["harnessModules"] as? [String], ["workbuddy", "workbuddy-ai", "glm", "antigravity"])
             let modes = Dictionary(uniqueKeysWithValues: HarnessRegistry.legacyIDs.map { ($0.rawValue, "disabled") })
             _ = await runtime.receive(try command("initialize", ["providerModes": modes], harnessModules: supports))
             let snapshot = try XCTUnwrap(capture.snapshots().last)

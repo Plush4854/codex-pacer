@@ -1459,6 +1459,29 @@
 "help.workbuddy-ai.progress.detail" = "After you trust pacer_progress in WorkBuddy AI’s Custom Connector, tasks report how much is done.";
 "help.workbuddy-ai.apps.title" = "Back to the chat";
 "help.workbuddy-ai.apps.detail" = "Click a task to open its conversation in WorkBuddy AI.";
+
+"module.glm.summary" = "Tasks and quota from GLM ZCode.";
+"welcome.module.glm_missing" = "GLM ZCode not found";
+"glm.progress_ring_help" = "GLM ZCode does not report how much of a request is done yet, so its tasks show no progress ring.";
+"main.search.glm" = "glm zcode tasks quota usage progress hooks folder";
+"panel.block.glm" = "GLM ZCode Quota";
+"panel.block_detail.glm" = "GLM ZCode’s 5-hour and 7-day quota left. Style, arrangement, details and the pace tick apply to every quota.";
+"help.glm.credits.title" = "Quota";
+"help.glm.credits.detail" = "Pacer reads your GLM coding plan’s 5-hour and weekly usage from Z.ai, about every two minutes, with the plan key ZCode keeps for the account you signed in to there. It needs no sign-in of its own. Team plans are not read yet.";
+"help.glm.cost.title" = "No turn costs";
+"help.glm.cost.detail" = "GLM ZCode task rows show no per-turn cost.";
+"help.glm.progress.title" = "Progress";
+"help.glm.progress.detail" = "GLM ZCode does not report how much of a request is done yet, so its tasks show no progress ring. Pacer still follows each turn as it works.";
+"help.glm.apps.title" = "Back to the chat";
+"help.glm.apps.detail" = "Open your conversation in ZCode itself.";
+"glm.quota.not_signed_in" = "Sign in to a GLM coding plan in ZCode to read usage.";
+"glm.quota.no_plan" = "This account has no GLM coding plan to read usage for.";
+"glm.quota.keyring_unavailable" = "ZCode’s stored plan key is locked. Unlock your computer’s credential store and try again.";
+"glm.quota.denied" = "Z.ai did not allow access to usage. Sign in to ZCode again.";
+"glm.quota.invalid_reply" = "GLM returned an unreadable usage response.";
+"glm.quota.timed_out" = "Reading GLM usage timed out. Try again.";
+"glm.quota.connection_failed" = "Could not connect to the GLM usage service.";
+"quota.source_glm" = "Z.ai usage service";
 "main.history.workbuddy-ai_week" = "WorkBuddy AI · Last 7 Days";
 "main.history.workbuddy-ai_empty" = "Shows after two days with credits used.";
 "harness.account.sign_out" = "Sign Out";
@@ -1818,3 +1841,21 @@
 "collab.intro.demo.cleaned" = "Cleaned up; Codex history stays clean";
 "collab.intro.demo.claude_model" = "Opus 5.5 high";
 "collab.intro.demo.codex_model" = "Sol 6.2 high";
+
+"module.antigravity.summary" = "Tasks and progress from Antigravity and Antigravity IDE.";
+"welcome.module.antigravity_missing" = "Antigravity not found";
+"antigravity.app" = "Antigravity App";
+"antigravity.ide" = "Antigravity IDE";
+"antigravity.progress_ring_help" = "Pacer sets up progress reporting automatically. Restart Antigravity after setup. The ring fills when the agent reports an estimate.";
+"help.antigravity.progress.title" = "Progress";
+"help.antigravity.progress.detail" = "Pacer shows an estimate when Antigravity calls the local progress tool. Reload the MCP servers in Antigravity after turning on the ring.";
+
+"panel.block.antigravity" = "Antigravity Quota";
+"panel.block_detail.antigravity" = "Model quotas supplied by the Antigravity CLI.";
+"antigravity.quota.waiting" = "Waiting for quota. Make sure Antigravity CLI is installed and signed in.";
+"antigravity.quota.reset" = "Resets {0}";
+"antigravity.quota.stale" = "Showing the last available reading.";
+"antigravity.quota.gemini" = "Gemini";
+"antigravity.quota.claude_gpt" = "Claude and GPT";
+"antigravity.quota.five_hours" = "5-hour limit";
+"antigravity.quota.weekly" = "Weekly limit";
