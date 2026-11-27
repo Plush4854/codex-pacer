@@ -40,6 +40,8 @@ enum WindowsAntigravityQuota {
               !Task.isCancelled else { return }
         var environment = ProcessInfo.processInfo.environment
         environment[backgroundRefreshKey] = "1"
+        // The CLI updater can start a visible Windows Terminal from this background check.
+        environment["AGY_CLI_DISABLE_AUTO_UPDATE"] = "true"
         _ = await WindowsSubprocess.capture(executable: cli, arguments: ["models"], timeout: 12, limit: 64 * 1024,
                                             workingDirectory: home, environment: environment)
         // The provider dispatches status line invocations asynchronously.
